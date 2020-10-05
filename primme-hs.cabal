@@ -1,0 +1,57 @@
+cabal-version:       2.4
+name:                primme-hs
+version:             0.0.0.0
+synopsis:            Haskell wrapper for PRIMME library
+description:         Haskell wrapper for PRIMME library
+homepage:            https://github.com/twesterhout/primme-hs
+bug-reports:         https://github.com/twesterhout/primme-hs/issues
+license:             BSD-3-Clause
+license-file:        LICENSE
+author:              Tom Westerhout
+maintainer:          Tom Westerhout <14264576+twesterhout@users.noreply.github.com>
+copyright:           2020 Tom Westerhout
+build-type:          Simple
+extra-doc-files:     README.md
+                     CHANGELOG.md
+tested-with:         GHC == 8.10.1
+
+source-repository head
+  type:                git
+  location:            https://github.com/twesterhout/primme-hs.git
+
+common common-options
+  build-depends:       base ^>= 4.14.0.0
+
+  ghc-options:         -Wall
+                       -Wcompat
+                       -Widentities
+                       -Wincomplete-uni-patterns
+                       -Wincomplete-record-updates
+  if impl(ghc >= 8.0)
+    ghc-options:       -Wredundant-constraints
+  if impl(ghc >= 8.2)
+    ghc-options:       -fhide-source-paths
+  if impl(ghc >= 8.4)
+    ghc-options:       -Wmissing-export-lists
+                       -Wpartial-fields
+  if impl(ghc >= 8.8)
+    ghc-options:       -Wmissing-deriving-strategies
+  if impl(ghc >= 8.10)
+    ghc-options:       -Wunused-packages
+
+  default-language:    Haskell2010
+
+library
+  import:              common-options
+  hs-source-dirs:      src
+  exposed-modules:     PrimmeHs
+
+test-suite primme-hs-test
+  import:              common-options
+  type:                exitcode-stdio-1.0
+  hs-source-dirs:      test
+  main-is:             Spec.hs
+  build-depends:       primme-hs
+  ghc-options:         -threaded
+                       -rtsopts
+                       -with-rtsopts=-N
