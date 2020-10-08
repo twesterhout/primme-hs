@@ -1,10 +1,12 @@
 module Numeric.PRIMME.Internal where
 
+import Control.Exception (bracket)
 import Control.Monad
 import Data.Coerce
 import Data.Proxy
+import Foreign.Storable
 import Foreign.C.Types (CInt, CLong)
-import Foreign.Ptr (Ptr, castPtr, nullPtr)
+import Foreign.Ptr (Ptr, castPtr, nullPtr, FunPtr, freeHaskellFunPtr)
 
 #include <primme.h>
 #include "wrapper.h"
@@ -47,7 +49,7 @@ import Foreign.Ptr (Ptr, castPtr, nullPtr)
 -- , PRIMME_LOBPCG_OrthoBasis
 -- , PRIMME_LOBPCG_OrthoBasis_Window }
 
-class PrimmeDatatype a where
+class Storable a => PrimmeDatatype a where
   toPrimmeDatatype :: Proxy a -> Cprimme_op_datatype
 
 instance PrimmeDatatype Float where toPrimmeDatatype _ = Cprimme_op_float
@@ -65,11 +67,14 @@ primme_set_dim p n
   | n <= 0 = error $ "invalid matrix dimension: " <> show n
   | otherwise = {#set primme_params.n#} p (fromIntegral n)
 
+primme_get_dim :: Cprimme_params -> IO Int
+primme_get_dim p = fromIntegral <$> {#get primme_params.n#} p
+
 primme_set_num_evals :: Cprimme_params -> Int -> IO ()
 primme_set_num_evals p n
   | n <= 0 = invalidArgument
   | otherwise = do
-      dim <- fromIntegral <$> {#get primme_params.n#} p
+      dim <- primme_get_dim p
       when (n > dim) invalidArgument
       {#set primme_params.numEvals#} p (fromIntegral n)
   where invalidArgument = error $ "invalid number of eigenvalues: " <> show n
@@ -91,3 +96,15 @@ bar = do
   return ()
 
 type PrimmeInt = CLong
+
+
+-- void (*matrixMatvec)
+--       ( void *x, PRIMME_INT *ldx, void *y, PRIMME_INT *ldy, int *blockSize,
+--         struct primme_params *primme, int *ierr);
+type CmatrixMatvec = Ptr () -> Ptr PrimmeInt -> Ptr () -> Ptr PrimmeInt -> Ptr CInt -> Cprimme_params -> Ptr CInt -> IO ()
+
+foreign import ccall "wrapper"
+    mkCmatrixMatvec :: CmatrixMatvec -> IO (FunPtr CmatrixMatvec)
+
+withCmatrixMatvec :: CmatrixMatvec -> (FunPtr CmatrixMatvec -> IO a) -> IO a
+withCmatrixMatvec f = bracket (mkCmatrixMatvec f) freeHaskellFunPtr
