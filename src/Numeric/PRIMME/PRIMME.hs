@@ -1,4 +1,10 @@
-module Numeric.PRIMME.PRIMME (bar) where
+module Numeric.PRIMME.PRIMME
+  ( PrimmeMatrix (..),
+    PrimmeOptions (..),
+    PrimmeTarget (..),
+    eigh,
+  )
+where
 
 import Control.Exception (bracket)
 import Control.Monad (when)
@@ -31,7 +37,7 @@ data PrimmeOptions = PrimmeOptions
     pEps :: Double
   }
 
-withOptions :: PrimmeOptions -> PrimmeMatrix a -> (Cprimme_params -> IO b) -> IO b
+withOptions :: PrimmeDatatype a => PrimmeOptions -> PrimmeMatrix a -> (Cprimme_params -> IO b) -> IO b
 withOptions opts matrix func = bracket acquire release worker
   where
     acquire = do
@@ -48,7 +54,9 @@ withOptions opts matrix func = bracket acquire release worker
       primme_set_eps p (pEps opts)
       c <- primme_set_method PRIMME_DEFAULT_MIN_MATVECS p
       when (c /= 0) $ error "failed to set method"
-      func p
+      withMatVec (pMatrix matrix) $ \matvecPtr -> do
+        primme_set_matvec p matvecPtr
+        func p
 
 withMatVec :: PrimmeDatatype a => MatVecType a -> (FunPtr CmatrixMatvec -> IO b) -> IO b
 withMatVec f = withCmatrixMatvec cWrapper
@@ -69,6 +77,18 @@ withMatVec f = withCmatrixMatvec cWrapper
             | otherwise = return ()
       go 0
       poke errPtr 0
+
+eigh :: forall a. PrimmeDatatype a => PrimmeOptions -> PrimmeMatrix a -> IO (Vector (RealPart a), Vector a, Vector (RealPart a))
+eigh options matrix = do
+  (evals :: MVector RealWorld (RealPart a)) <- MV.new $ pNumEvals options
+  (evecs :: MVector RealWorld a) <- MV.new $ pDim matrix * pNumEvals options
+  (rnorms :: MVector RealWorld (RealPart a)) <- MV.new $ pNumEvals options
+  MV.unsafeWith evals $ \evalsPtr ->
+    MV.unsafeWith evecs $ \evecsPtr ->
+      MV.unsafeWith rnorms $ \rnormsPtr ->
+        withOptions options matrix $ \optionsPtr -> do
+          cPrimme evalsPtr evecsPtr rnormsPtr optionsPtr
+  (,,) <$> V.unsafeFreeze evals <*> V.unsafeFreeze evecs <*> V.unsafeFreeze rnorms
 
 -- void (*matrixMatvec)
 --       ( void *x, PRIMME_INT *ldx, void *y, PRIMME_INT *ldy, int *blockSize,

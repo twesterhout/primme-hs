@@ -41,6 +41,11 @@ common common-options
     ghc-options:       -Wunused-packages
 
   default-language:    Haskell2010
+  default-extensions:  BangPatterns
+                       FlexibleContexts
+                       FlexibleInstances
+		       TypeFamilies
+                       ScopedTypeVariables
 
 
 library
@@ -51,9 +56,18 @@ library
                        cbits/wrapper.c
   exposed-modules:     Numeric.PRIMME.PRIMME
                      , Numeric.PRIMME.Internal
+  extra-libraries:     primme
   include-dirs:        cbits
-                     , /home/tom/src/primme/include
-  extra-libraries:     /home/tom/src/primme/lib/libprimme.a
+                     , /home/tom/src/primme-hs/third_party/primme/include
+  extra-lib-dirs:      /home/tom/src/primme-hs/third_party/primme/lib
+
+executable example1
+  import:              common-options
+  hs-source-dirs:      example/dense
+  main-is:             Main.hs
+  build-depends:       primme-hs
+                     , vector
+  pkgconfig-depends:   openblas
 
 test-suite primme-hs-test
   import:              common-options

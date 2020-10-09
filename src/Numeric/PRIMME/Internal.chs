@@ -5,7 +5,7 @@ import Control.Monad
 import Data.Coerce
 import Data.Proxy
 import Foreign.Storable
-import Foreign.C.Types (CInt, CLong)
+import Foreign.C.Types (CInt, CFloat, CDouble, CLong)
 import Foreign.Ptr (Ptr, castPtr, nullPtr, FunPtr, freeHaskellFunPtr)
 
 #include <primme.h>
@@ -49,10 +49,6 @@ import Foreign.Ptr (Ptr, castPtr, nullPtr, FunPtr, freeHaskellFunPtr)
 -- , PRIMME_LOBPCG_OrthoBasis
 -- , PRIMME_LOBPCG_OrthoBasis_Window }
 
-class Storable a => PrimmeDatatype a where
-  toPrimmeDatatype :: Proxy a -> Cprimme_op_datatype
-
-instance PrimmeDatatype Float where toPrimmeDatatype _ = Cprimme_op_float
 
 
 {#pointer *primme_params as Cprimme_params#}
@@ -61,6 +57,10 @@ instance PrimmeDatatype Float where toPrimmeDatatype _ = Cprimme_op_float
 {#fun unsafe primme_params_destroy { `Cprimme_params' } -> `CInt' #}
 {#fun unsafe primme_set_method { `Cprimme_preset_method', `Cprimme_params' } -> `CInt' #}
 {#fun wrap_primme_display_params as primme_display_params { `Cprimme_params' } -> `()' #}
+
+-- int dprimme(double *evals, double *evecs, double *resNorms, primme_params *primme)
+{#fun sprimme { id `Ptr CFloat', id `Ptr CFloat', id `Ptr CFloat', `Cprimme_params' } -> `CInt' #}
+{#fun dprimme { id `Ptr CDouble', id `Ptr CDouble', id `Ptr CDouble', `Cprimme_params' } -> `CInt' #}
 
 primme_set_dim :: Cprimme_params -> Int -> IO ()
 primme_set_dim p n
@@ -108,3 +108,34 @@ foreign import ccall "wrapper"
 
 withCmatrixMatvec :: CmatrixMatvec -> (FunPtr CmatrixMatvec -> IO a) -> IO a
 withCmatrixMatvec f = bracket (mkCmatrixMatvec f) freeHaskellFunPtr
+
+type family RealPart a where
+  RealPart Float = Float
+  RealPart CFloat = CFloat
+  RealPart Double = Double
+  RealPart CDouble = CDouble
+
+class (Storable a, Storable (RealPart a)) => PrimmeDatatype a where
+  cDatatype :: Proxy a -> Cprimme_op_datatype
+  cPrimme :: Ptr (RealPart a) -> Ptr a -> Ptr (RealPart a) -> Cprimme_params -> IO CInt
+
+instance PrimmeDatatype Float where
+  cDatatype _ = Cprimme_op_float
+  cPrimme evals evecs rnorms params = sprimme (castPtr evals) (castPtr evecs) (castPtr rnorms) params
+
+instance PrimmeDatatype CFloat where
+  cDatatype _ = Cprimme_op_float
+  cPrimme = sprimme
+
+instance PrimmeDatatype Double where
+  cDatatype _ = Cprimme_op_double
+  cPrimme evals evecs rnorms params = dprimme (castPtr evals) (castPtr evecs) (castPtr rnorms) params
+
+instance PrimmeDatatype CDouble where
+  cDatatype _ = Cprimme_op_double
+  cPrimme = dprimme
+
+
+primme_set_matvec :: Cprimme_params -> FunPtr CmatrixMatvec -> IO ()
+primme_set_matvec = {#set primme_params.matrixMatvec#}
+
