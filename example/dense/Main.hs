@@ -7,7 +7,7 @@ import qualified Data.Vector.Storable.Mutable as MV
 import Foreign.C.Types
 import Foreign.Marshal.Utils
 import Foreign.Ptr
-import Numeric.PRIMME.PRIMME
+import Numeric.PRIMME
 
 foreign import ccall "dgemv_"
   dgemv_ :: --
@@ -36,14 +36,16 @@ dgemv' m n aPtr xPtr yPtr =
 
 data Matrix = Matrix Int Int (Vector Double)
 
-toPrimme :: Matrix -> PrimmeMatrix Double
-toPrimme (Matrix n m a) = PrimmeMatrix gemv n
-  where
-    gemv x y =
-      V.unsafeWith a $ \aPtr ->
-        V.unsafeWith x $ \xPtr ->
-          MV.unsafeWith y $ \yPtr ->
-            dgemv' n m aPtr xPtr yPtr
+toPrimme :: Matrix -> PrimmeOperator Double
+toPrimme (Matrix n m a) = fromDense n n a
+
+-- PrimmeMatrix gemv n
+--   where
+--     gemv x y =
+--       V.unsafeWith a $ \aPtr ->
+--         V.unsafeWith x $ \xPtr ->
+--           MV.unsafeWith y $ \yPtr ->
+--             dgemv' n m aPtr xPtr yPtr
 
 ex1 :: Matrix
 ex1 =
@@ -68,5 +70,5 @@ main = do
   -- y <- MV.new 4
   -- (pMatrix m) x y
   -- print =<< V.toList <$> V.unsafeFreeze y
-  (evals, evecs, rnorms) <- eigh (PrimmeOptions 1 PrimmeSmallest 1.0e-9) m
+  [(evals, evecs, rnorms)] <- eigh (PrimmeOptions 3 1 PrimmeSmallest 1.0e-9) m
   print evals
