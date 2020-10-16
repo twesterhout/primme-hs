@@ -2,11 +2,17 @@ module Numeric.PRIMME.Internal where
 
 import Control.Exception (bracket)
 import Control.Monad
+import Control.Monad.ST (RealWorld)
 import Data.Coerce
+import Data.Complex
 import Data.Proxy
+import Data.Vector.Storable (MVector, Vector)
+import qualified Data.Vector.Storable as V
+import qualified Data.Vector.Storable.Mutable as MV
 import Foreign.Storable
-import Foreign.C.Types (CInt, CFloat, CDouble, CLong)
+import Foreign.C.Types (CChar, CInt, CFloat, CDouble, CLong)
 import Foreign.Ptr (Ptr, castPtr, nullPtr, FunPtr, freeHaskellFunPtr)
+import Foreign.Marshal.Utils
 
 #include <primme.h>
 #include "wrapper.h"
@@ -115,27 +121,68 @@ type family RealPart a where
   RealPart Double = Double
   RealPart CDouble = CDouble
 
-class (Storable a, Storable (RealPart a)) => PrimmeDatatype a where
+type BlasInt = CInt
+
+type BlasHemmType a
+  = Ptr CChar -- ^ SIDE
+ -> Ptr CChar -- ^ UPLO
+ -> Ptr BlasInt -- ^ M
+ -> Ptr BlasInt -- ^ N
+ -> Ptr a -- ^ ALPHA
+ -> Ptr a -- ^ A
+ -> Ptr BlasInt -- ^ LDA
+ -> Ptr a -- ^ B
+ -> Ptr BlasInt -- ^ LDB
+ -> Ptr a -- ^ BETA
+ -> Ptr a -- ^ C
+ -> Ptr BlasInt -- ^ LDC
+ -> IO ()
+
+foreign import ccall "ssymm_" ssymm_ :: BlasHemmType Float
+foreign import ccall "dsymm_" dsymm_ :: BlasHemmType Double
+foreign import ccall "chemm_" chemm_ :: BlasHemmType (Complex Float)
+foreign import ccall "zhemm_" zhemm_ :: BlasHemmType (Complex Double)
+
+class (Num a, Storable a, Storable (RealPart a)) => PrimmeDatatype a where
   cDatatype :: Proxy a -> Cprimme_op_datatype
   cPrimme :: Ptr (RealPart a) -> Ptr a -> Ptr (RealPart a) -> Cprimme_params -> IO CInt
+  cHemm :: BlasHemmType a
 
 instance PrimmeDatatype Float where
   cDatatype _ = Cprimme_op_float
   cPrimme evals evecs rnorms params = sprimme (castPtr evals) (castPtr evecs) (castPtr rnorms) params
+  cHemm = ssymm_
 
 instance PrimmeDatatype CFloat where
   cDatatype _ = Cprimme_op_float
   cPrimme = sprimme
+  cHemm = coerce ssymm_
 
 instance PrimmeDatatype Double where
   cDatatype _ = Cprimme_op_double
   cPrimme evals evecs rnorms params = dprimme (castPtr evals) (castPtr evecs) (castPtr rnorms) params
+  cHemm = dsymm_
 
 instance PrimmeDatatype CDouble where
   cDatatype _ = Cprimme_op_double
   cPrimme = dprimme
+  cHemm = coerce dsymm_
 
+hemm :: PrimmeDatatype a => Int -> Int -> a -> Vector a -> Int -> Vector a -> Int -> a -> MVector RealWorld a -> Int -> IO ()
+hemm m n α a aStride b bStride β c cStride = do
+  with (fromIntegral (fromEnum 'L') :: CChar) $ \side' ->
+    with (fromIntegral (fromEnum 'U') :: CChar) $ \uplo' ->
+      with (fromIntegral m) $ \m' ->
+        with (fromIntegral n) $ \n' ->
+          with (fromIntegral aStride) $ \aStride' ->
+            with (fromIntegral bStride) $ \bStride' ->
+              with (fromIntegral cStride) $ \cStride' ->
+                with α $ \α' ->
+                  with β $ \β' ->
+                    V.unsafeWith a $ \aPtr ->
+                      V.unsafeWith b $ \bPtr ->
+                        MV.unsafeWith c $ \cPtr ->
+                          cHemm side' uplo' m' n' α' aPtr aStride' bPtr bStride' β' cPtr cStride'
 
 primme_set_matvec :: Cprimme_params -> FunPtr CmatrixMatvec -> IO ()
 primme_set_matvec = {#set primme_params.matrixMatvec#}
-
