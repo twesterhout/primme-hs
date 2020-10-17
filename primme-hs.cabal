@@ -22,6 +22,7 @@ source-repository head
 common common-options
   build-depends:       base ^>= 4.13.0.0
                      , vector
+                     , text
 
   ghc-options:         -Wall
                        -Wcompat
@@ -44,8 +45,9 @@ common common-options
   default-extensions:  BangPatterns
                        FlexibleContexts
                        FlexibleInstances
-		       TypeFamilies
+                       TypeFamilies
                        ScopedTypeVariables
+                       OverloadedStrings
 
 
 library
@@ -54,7 +56,7 @@ library
   hs-source-dirs:      src
   c-sources:           cbits/wrapper.h
                        cbits/wrapper.c
-  exposed-modules:     Numeric.PRIMME.PRIMME
+  exposed-modules:     Numeric.PRIMME
                      , Numeric.PRIMME.Internal
   extra-libraries:     primme
   include-dirs:        cbits
