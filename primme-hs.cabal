@@ -62,6 +62,8 @@ library
   include-dirs:        cbits
                      , /home/tom/src/primme-hs/third_party/primme/include
   extra-lib-dirs:      /home/tom/src/primme-hs/third_party/primme/lib
+  ld-options:          -Wl,-rpath /home/tom/src/primme-hs/third_party/primme/lib
+  pkgconfig-depends:   openblas
 
 executable example1
   import:              common-options
@@ -69,7 +71,6 @@ executable example1
   main-is:             Main.hs
   build-depends:       primme-hs
                      , vector
-  pkgconfig-depends:   openblas
 
 test-suite primme-hs-test
   import:              common-options

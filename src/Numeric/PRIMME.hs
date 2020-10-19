@@ -126,9 +126,9 @@ fromDense dim stride matrix
 
 blockHemm :: PrimmeDatatype a => a -> Block a -> Block a -> a -> MBlock RealWorld a -> IO ()
 blockHemm α (Block (m, n) aStride a) (Block (n', k) bStride b) β (MBlock (m', k') cStride c) = do
-  when (m /= m' || n /= n' || k /= k') . error $
+  when (m /= n || m /= m' || n /= n' || k /= k') . error $
     "dimension mismatch: " <> show (m, n) <> " x " <> show (n', k) <> " = " <> show (m', k')
-  hemm m n α a aStride b bStride β c cStride
+  hemm m' k' α a aStride b bStride β c cStride
 
 -- | Which eigenpairs to target.
 data PrimmeTarget
@@ -173,6 +173,7 @@ withOptions opts apply func = bracket acquire release worker
       primme_set_num_evals p (pNumEvals opts)
       primme_set_target p (toCprimme_target . pTarget $ opts)
       primme_set_eps p (pEps opts)
+      primme_set_print_level p 5
       c <- primme_set_method PRIMME_DEFAULT_MIN_MATVECS p
       when (c /= 0) $ error "failed to set method"
       withOperator apply $ \matvecPtr ->

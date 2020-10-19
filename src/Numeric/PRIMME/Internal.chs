@@ -76,6 +76,9 @@ primme_set_dim p n
 primme_get_dim :: Cprimme_params -> IO Int
 primme_get_dim p = fromIntegral <$> {#get primme_params.n#} p
 
+primme_set_print_level :: Cprimme_params -> Int -> IO ()
+primme_set_print_level p n = {#set primme_params.printLevel#} p (fromIntegral n)
+
 primme_set_num_evals :: Cprimme_params -> Int -> IO ()
 primme_set_num_evals p n
   | n <= 0 = invalidArgument
@@ -138,10 +141,10 @@ type BlasHemmType a
  -> Ptr BlasInt -- ^ LDC
  -> IO ()
 
-foreign import ccall "ssymm_" ssymm_ :: BlasHemmType Float
-foreign import ccall "dsymm_" dsymm_ :: BlasHemmType Double
-foreign import ccall "chemm_" chemm_ :: BlasHemmType (Complex Float)
-foreign import ccall "zhemm_" zhemm_ :: BlasHemmType (Complex Double)
+foreign import ccall unsafe "ssymm_" ssymm_ :: BlasHemmType Float
+foreign import ccall unsafe "dsymm_" dsymm_ :: BlasHemmType Double
+foreign import ccall unsafe "chemm_" chemm_ :: BlasHemmType (Complex Float)
+foreign import ccall unsafe "zhemm_" zhemm_ :: BlasHemmType (Complex Double)
 
 class (Num a, Storable a, Storable (RealPart a)) => PrimmeDatatype a where
   cDatatype :: Proxy a -> Cprimme_op_datatype
@@ -171,7 +174,8 @@ instance PrimmeDatatype CDouble where
 hemm :: PrimmeDatatype a => Int -> Int -> a -> Vector a -> Int -> Vector a -> Int -> a -> MVector RealWorld a -> Int -> IO ()
 hemm m n α a aStride b bStride β c cStride = do
   with (fromIntegral (fromEnum 'L') :: CChar) $ \side' ->
-    with (fromIntegral (fromEnum 'U') :: CChar) $ \uplo' ->
+    with (fromIntegral (fromEnum 'U') :: CChar) $ \uplo' -> do
+      print (m, n)
       with (fromIntegral m) $ \m' ->
         with (fromIntegral n) $ \n' ->
           with (fromIntegral aStride) $ \aStride' ->
