@@ -3,22 +3,33 @@
 -- SPDX-License-Identifier: BSD-3-Clause
 -- Maintainer: Tom Westerhout <14264576+twesterhout@users.noreply.github.com>
 --
--- High-level wrapper around PRIMME C library
+-- High-level wrapper around [PRIMME C
+-- library](https://github.com/primme/primme). /Quote from README/:
+--
+-- @
+--   PRIMME, pronounced as prime, is a high-performance library for computing a few
+--   eigenvalues/eigenvectors, and singular values/vectors. PRIMME is especially
+--   optimized for large, difficult problems. Real symmetric and complex Hermitian
+--   problems, standard @A x = λ x@ and generalized @A x = λ B x@, are supported.
+--   Besides, standard eigenvalue problems with a normal matrix are supported. It
+--   can find largest, smallest, or interior singular/eigenvalues, and can use
+--   preconditioning to accelerate convergence.
+-- @
 module Numeric.PRIMME
   ( -- * Defining the matrix
 
     -- | One of the great things about PRIMME library is that it works with
     -- block matrix-vector products (i.e. matrix-matrix products). Following the
-    -- example of @vector@ library, we define two types for mutable and
-    -- immutable dense blocks.
+    -- example of [vector](https://hackage.haskell.org/package/vector) library,
+    -- we define two types for mutable and immutable dense blocks.
     MBlock (..),
     Block (..),
     -- | Now we are can define the "operator" we want to diagonalize. Since this
     -- library is meant to be used with rather large matrices, it might very
     -- well be the case that the matrix does not fit into the memory of your
-    -- computer (even in sparse format such as CSR).  Sometimes, however, we can
+    -- computer (even in sparse format such as CSR). Sometimes, however, we can
     -- define the "operator" implicitly, namely, by defining its action on a
-    -- vector (or in case of PRIMME on a block of vectors). This is done by
+    -- vector (or in case of PRIMME on a block of vectors). This is done with
     -- 'PrimmeOperator' type.
     PrimmeOperator (..),
     -- | The most trivial example of an "operator" is of course a square dense
@@ -29,12 +40,16 @@ module Numeric.PRIMME
     -- * Choosing what to compute
 
     -- | Having defined a 'PrimmeOperator' we now need to tell PRIMME what to
-    -- compute. This is done by constructing a 'PrimmeOptions' object
+    -- compute. This is done by constructing a 'PrimmeOptions' object.
     PrimmeOptions (..),
     PrimmeTarget (..),
 
     -- * Diagonalizing
     eigh,
+
+    -- * Misc
+    PrimmeException (..),
+    PrimmeDatatype,
   )
 where
 
@@ -53,15 +68,8 @@ import Foreign.Ptr (FunPtr, Ptr, castPtr, nullPtr, plusPtr)
 import Foreign.Storable
 import Numeric.PRIMME.Internal
 
--- | Matrix-vector product
--- type MatVecType a =
---   -- | Input vector @x@
---   Vector a ->
---   -- | Output vector @y@ where @Ax@ is written to
---   MVector RealWorld a ->
---   -- | Action is performed in 'IO' monad since it typically involves FFI
---   IO ()
-data PrimmeException = PrimmeException !Text
+-- | Exceptions thrown by this package.
+newtype PrimmeException = PrimmeException Text
   deriving (Show)
 
 instance Exception PrimmeException
@@ -101,8 +109,11 @@ type PrimmeOperator a =
   IO ()
 
 -- | Treat a dense symmetric or Hermitian matrix as a operator. Internally we
--- call @?symm@ or @?hemm@ BLAS functions so it is really important that the
--- matrix is indeed Hermitian.
+-- call
+-- [@?symm@](https://www.netlib.org/lapack/explore-html/db/dc9/group__single__blas__level3_ga8e8391a9873114d97e2b63e39fe83b2e.html#ga8e8391a9873114d97e2b63e39fe83b2e)
+-- or
+-- [@?hemm@](https://www.netlib.org/lapack/explore-html/db/def/group__complex__blas__level3_gad2d1853a142397404eae974b6574ece3.html#gad2d1853a142397404eae974b6574ece3)
+-- BLAS functions so it is really important that the matrix is indeed Hermitian.
 fromDense ::
   PrimmeDatatype a =>
   -- | Dimension @dim@ of the matrix (i.e. number of rows or number of columns)
@@ -129,6 +140,15 @@ blockHemm α (Block (m, n) aStride a) (Block (n', k) bStride b) β (MBlock (m', 
   when (m /= n || m /= m' || n /= n' || k /= k') . error $
     "dimension mismatch: " <> show (m, n) <> " x " <> show (n', k) <> " = " <> show (m', k')
   hemm m' k' α a aStride b bStride β c cStride
+
+isHermitian :: PrimmeDatatype a => Block a -> Bool
+isHermitian (Block (n, n') stride v) = undefined
+  where
+    access i j = v V.! (i + stride * j)
+    check i j = undefined
+    loop !i !high f
+      | i < high = f i >> loop (i + 1) high f
+      | otherwise = return ()
 
 -- | Which eigenpairs to target.
 data PrimmeTarget

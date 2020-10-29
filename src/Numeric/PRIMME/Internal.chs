@@ -5,6 +5,7 @@ import Control.Monad
 import Control.Monad.ST (RealWorld)
 import Data.Coerce
 import Data.Complex
+import qualified Data.Complex
 import Data.Proxy
 import Data.Vector.Storable (MVector, Vector)
 import qualified Data.Vector.Storable as V
@@ -118,11 +119,45 @@ foreign import ccall "wrapper"
 withCmatrixMatvec :: CmatrixMatvec -> (FunPtr CmatrixMatvec -> IO a) -> IO a
 withCmatrixMatvec f = bracket (mkCmatrixMatvec f) freeHaskellFunPtr
 
+-- | A GADT which allows to dispatch between BLAS types at runtime.
+data BlasDatatypeTag :: (* -> *) where
+  FloatTag :: BlasDatatypeTag Float
+  DoubleTag :: BlasDatatypeTag Double
+  ComplexFloatTag :: BlasDatatypeTag (Complex Float)
+  ComplexDoubleTag :: BlasDatatypeTag (Complex Double)
+
+-- | BLAS datatype
+class (Storable a, Floating a) => BlasDatatype a where
+  type BlasRealPart a :: *
+  blasTag :: proxy a -> BlasDatatypeTag a
+  conj :: a -> a
+
+instance BlasDatatype Float where
+  type BlasRealPart Float = Float
+  blasTag _ = FloatTag
+  conj = id
+
+instance BlasDatatype Double where
+  type BlasRealPart Double = Double
+  blasTag _ = DoubleTag
+  conj = id
+
+instance BlasDatatype (Complex Float) where
+  type BlasRealPart (Complex Float) = Float
+  blasTag _ = ComplexFloatTag
+  conj = Data.Complex.conjugate
+
+instance BlasDatatype (Complex Double) where
+  type BlasRealPart (Complex Double) = Double
+  blasTag _ = ComplexDoubleTag
+  conj = Data.Complex.conjugate
+
 type family RealPart a where
   RealPart Float = Float
   RealPart CFloat = CFloat
   RealPart Double = Double
   RealPart CDouble = CDouble
+  RealPart (Complex a) = a
 
 type BlasInt = CInt
 
@@ -146,36 +181,25 @@ foreign import ccall unsafe "dsymm_" dsymm_ :: BlasHemmType Double
 foreign import ccall unsafe "chemm_" chemm_ :: BlasHemmType (Complex Float)
 foreign import ccall unsafe "zhemm_" zhemm_ :: BlasHemmType (Complex Double)
 
-class (Num a, Storable a, Storable (RealPart a)) => PrimmeDatatype a where
+class (BlasDatatype a, Num a, Storable a, Storable (RealPart a)) => PrimmeDatatype a where
   cDatatype :: Proxy a -> Cprimme_op_datatype
   cPrimme :: Ptr (RealPart a) -> Ptr a -> Ptr (RealPart a) -> Cprimme_params -> IO CInt
-  cHemm :: BlasHemmType a
+
+castPtr' :: Coercible a b => Ptr a -> Ptr b
+castPtr' = castPtr
 
 instance PrimmeDatatype Float where
   cDatatype _ = Cprimme_op_float
-  cPrimme evals evecs rnorms params = sprimme (castPtr evals) (castPtr evecs) (castPtr rnorms) params
-  cHemm = ssymm_
-
-instance PrimmeDatatype CFloat where
-  cDatatype _ = Cprimme_op_float
-  cPrimme = sprimme
-  cHemm = coerce ssymm_
+  cPrimme evals evecs rnorms params = sprimme (castPtr' evals) (castPtr' evecs) (castPtr' rnorms) params
 
 instance PrimmeDatatype Double where
   cDatatype _ = Cprimme_op_double
-  cPrimme evals evecs rnorms params = dprimme (castPtr evals) (castPtr evecs) (castPtr rnorms) params
-  cHemm = dsymm_
+  cPrimme evals evecs rnorms params = dprimme (castPtr' evals) (castPtr' evecs) (castPtr' rnorms) params
 
-instance PrimmeDatatype CDouble where
-  cDatatype _ = Cprimme_op_double
-  cPrimme = dprimme
-  cHemm = coerce dsymm_
-
-hemm :: PrimmeDatatype a => Int -> Int -> a -> Vector a -> Int -> Vector a -> Int -> a -> MVector RealWorld a -> Int -> IO ()
+hemm :: BlasDatatype a => Int -> Int -> a -> Vector a -> Int -> Vector a -> Int -> a -> MVector RealWorld a -> Int -> IO ()
 hemm m n α a aStride b bStride β c cStride = do
   with (fromIntegral (fromEnum 'L') :: CChar) $ \side' ->
     with (fromIntegral (fromEnum 'U') :: CChar) $ \uplo' -> do
-      print (m, n)
       with (fromIntegral m) $ \m' ->
         with (fromIntegral n) $ \n' ->
           with (fromIntegral aStride) $ \aStride' ->
@@ -186,7 +210,14 @@ hemm m n α a aStride b bStride β c cStride = do
                     V.unsafeWith a $ \aPtr ->
                       V.unsafeWith b $ \bPtr ->
                         MV.unsafeWith c $ \cPtr ->
-                          cHemm side' uplo' m' n' α' aPtr aStride' bPtr bStride' β' cPtr cStride'
+                          hemm' side' uplo' m' n' α' aPtr aStride' bPtr bStride' β' cPtr cStride'
+
+hemm' :: forall b. BlasDatatype b => BlasHemmType b
+hemm' = case blasTag (Proxy :: Proxy b) of
+  FloatTag -> ssymm_
+  DoubleTag -> dsymm_
+  ComplexFloatTag -> chemm_
+  ComplexDoubleTag -> zhemm_
 
 primme_set_matvec :: Cprimme_params -> FunPtr CmatrixMatvec -> IO ()
 primme_set_matvec = {#set primme_params.matrixMatvec#}
