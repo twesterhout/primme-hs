@@ -42,7 +42,7 @@ import Foreign.Marshal.Utils
 #include "wrapper.h"
 
 
-{#typedef PRIMME_INT Cprimme_int#}
+type PrimmeInt = {#type wrap_primme_int#}
 
 {#enum primme_target as Cprimme_target
   { primme_smallest as Cprimme_smallest
@@ -62,24 +62,6 @@ import Foreign.Marshal.Utils
 
 {#enum primme_preset_method as Cprimme_preset_method
   { } #}
--- { PRIMME_DEFAULT_METHOD
--- , PRIMME_DYNAMIC
--- , PRIMME_DEFAULT_MIN_TIME
--- , PRIMME_DEFAULT_MIN_MATVECS
--- , PRIMME_Arnoldi
--- , PRIMME_GD
--- , PRIMME_GD_plusK
--- , PRIMME_GD_Olsen_plusK
--- , PRIMME_JD_Olsen_plusK
--- , PRIMME_RQI
--- , PRIMME_JDQR
--- , PRIMME_JDQMR
--- , PRIMME_JDQMR_ETol
--- , PRIMME_STEEPEST_DESCENT
--- , PRIMME_LOBPCG_OrthoBasis
--- , PRIMME_LOBPCG_OrthoBasis_Window }
-
-
 
 {#pointer *primme_params as Cprimme_params#}
 
@@ -88,7 +70,6 @@ import Foreign.Marshal.Utils
 {#fun unsafe primme_set_method { `Cprimme_preset_method', `Cprimme_params' } -> `CInt' #}
 -- {#fun wrap_primme_display_params as primme_display_params { `Cprimme_params' } -> `()' #}
 
--- int dprimme(double *evals, double *evecs, double *resNorms, primme_params *primme)
 {#fun sprimme { id `Ptr CFloat', id `Ptr CFloat', id `Ptr CFloat', `Cprimme_params' } -> `CInt' id #}
 {#fun dprimme { id `Ptr CDouble', id `Ptr CDouble', id `Ptr CDouble', `Cprimme_params' } -> `CInt' id #}
 
@@ -117,9 +98,6 @@ primme_set_target p t = {#set primme_params.target#} p (fromIntegral . fromEnum 
 
 primme_set_eps :: Cprimme_params -> Double -> IO ()
 primme_set_eps p eps = {#set primme_params.eps#} p (coerce eps)
-
-
-type PrimmeInt = CLong
 
 -- | Type of matrix-vector product accepted by PRIMME C library.
 -- @

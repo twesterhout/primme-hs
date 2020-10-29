@@ -55,8 +55,7 @@ library
   import:              common-options
   build-tool-depends:  c2hs:c2hs >= 0.28.6
   hs-source-dirs:      src
-  c-sources:           cbits/wrapper.h
-                       cbits/wrapper.c
+  c-sources:           cbits/wrapper.c
   exposed-modules:     Numeric.PRIMME
                      , Numeric.PRIMME.Internal
   extra-libraries:     primme
