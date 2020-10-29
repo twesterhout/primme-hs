@@ -31,7 +31,7 @@ module Numeric.PRIMME
     -- define the "operator" implicitly, namely, by defining its action on a
     -- vector (or in case of PRIMME on a block of vectors). This is done with
     -- 'PrimmeOperator' type.
-    PrimmeOperator (..),
+    PrimmeOperator,
     -- | The most trivial example of an "operator" is of course a square dense
     -- matrix. We thus provide a function which constructs an operator from a
     -- matrix.
@@ -49,6 +49,7 @@ module Numeric.PRIMME
 
     -- * Misc
     PrimmeException (..),
+    BlasDatatype (..),
     PrimmeDatatype,
   )
 where
@@ -56,15 +57,16 @@ where
 import Control.Exception (Exception, SomeException, bracket, catch, throw)
 import Control.Monad (when)
 import Control.Monad.ST (RealWorld)
+import qualified Data.Complex
+import Data.Proxy
 import Data.Text (Text)
 import qualified Data.Text as T
 import Data.Vector.Storable (Vector)
 import qualified Data.Vector.Storable as V
 import Data.Vector.Storable.Mutable (MVector)
 import qualified Data.Vector.Storable.Mutable as MV
-import Foreign.C.Types (CInt)
 import Foreign.ForeignPtr
-import Foreign.Ptr (FunPtr, Ptr, castPtr, nullPtr, plusPtr)
+import Foreign.Ptr (FunPtr, castPtr, nullPtr)
 import Foreign.Storable
 import Numeric.PRIMME.Internal
 
@@ -115,7 +117,7 @@ type PrimmeOperator a =
 -- [@?hemm@](https://www.netlib.org/lapack/explore-html/db/def/group__complex__blas__level3_gad2d1853a142397404eae974b6574ece3.html#gad2d1853a142397404eae974b6574ece3)
 -- BLAS functions so it is really important that the matrix is indeed Hermitian.
 fromDense ::
-  PrimmeDatatype a =>
+  BlasDatatype a =>
   -- | Dimension @dim@ of the matrix (i.e. number of rows or number of columns)
   Int ->
   -- | Stride along the second dimension (set it equal to @dim@ if your matrix
@@ -126,29 +128,59 @@ fromDense ::
   -- | Hermitian linear operator
   PrimmeOperator a
 fromDense dim stride matrix
-  | stride * dim == V.length matrix = \b c -> blockHemm 1 a b 0 c
-  | otherwise =
+  | stride * dim /= V.length matrix =
     throw . PrimmeException . T.pack $
       "dimension mismatch: expected " <> show stride <> " * " <> show dim
         <> " elements, but the buffer has length "
         <> show (V.length matrix)
+  | not (isHermitian a) = throw . PrimmeException $ "expected a Hermitian matrix"
+  | otherwise = \b c -> blockHemm 1 a b 0 c
   where
     a = Block (dim, dim) stride matrix
 
-blockHemm :: PrimmeDatatype a => a -> Block a -> Block a -> a -> MBlock RealWorld a -> IO ()
+blockHemm :: BlasDatatype a => a -> Block a -> Block a -> a -> MBlock RealWorld a -> IO ()
 blockHemm α (Block (m, n) aStride a) (Block (n', k) bStride b) β (MBlock (m', k') cStride c) = do
   when (m /= n || m /= m' || n /= n' || k /= k') . error $
     "dimension mismatch: " <> show (m, n) <> " x " <> show (n', k) <> " = " <> show (m', k')
   hemm m' k' α a aStride b bStride β c cStride
 
-isHermitian :: PrimmeDatatype a => Block a -> Bool
-isHermitian (Block (n, n') stride v) = undefined
+-- | Determine whether a matrix is Hermitian (or symmetric when @a@ is real).
+--
+-- /Note:/ this function returns 'False' for non-square matrices. No exceptions
+-- are thrown.
+isHermitian :: forall a. BlasDatatype a => Block a -> Bool
+isHermitian (Block (n, n') stride v)
+  | n == n' =
+    -- Iterate in column-major order here and over the lower part of the matrix
+    loop 0 (n - 1) $ \j ->
+      loop (j + 1) n $ \i ->
+        check i j
+  | otherwise = False
   where
-    access i j = v V.! (i + stride * j)
-    check i j = undefined
+    access !i !j = v V.! (i + stride * j)
+    check !i !j = access i j `unsafeEq` conj (access j i)
     loop !i !high f
-      | i < high = f i >> loop (i + 1) high f
-      | otherwise = return ()
+      | i < high =
+        if f i
+          then loop (i + 1) high f
+          else False
+      | otherwise = True
+    -- Yes, we really want exact binary comparison of floating point types
+    unsafeEq :: a -> a -> Bool
+    unsafeEq = case blasTag (Proxy :: Proxy a) of
+      FloatTag -> (==)
+      DoubleTag -> (==)
+      ComplexFloatTag -> (==)
+      ComplexDoubleTag -> (==)
+
+-- | Return complex conjugate of a number. For real numbers this is just 'id'.
+conj :: forall a. BlasDatatype a => a -> a
+conj = case blasTag (Proxy :: Proxy a) of
+  FloatTag -> id
+  DoubleTag -> id
+  ComplexFloatTag -> Data.Complex.conjugate
+  ComplexDoubleTag -> Data.Complex.conjugate
+{-# INLINE conj #-}
 
 -- | Which eigenpairs to target.
 data PrimmeTarget
@@ -218,16 +250,13 @@ withOperator !f = withCmatrixMatvec cWrapper
       (f x y >> poke errPtr 0) `catch` (\(_ :: SomeException) -> poke errPtr (-1))
 
 -- | Diagonalize the operator to find the first few eigenpairs.
---
--- For every eigenpair a tuple @(eigenvalue, eigenvector, residual norm)@ is
--- returned.
-eigh :: forall a. PrimmeDatatype a => PrimmeOptions -> PrimmeOperator a -> IO [(RealPart a, Vector a, RealPart a)]
+eigh :: forall a. PrimmeDatatype a => PrimmeOptions -> PrimmeOperator a -> IO (Vector (BlasRealPart a), Block a, Vector (BlasRealPart a))
 eigh options matrix = do
   let dim = pDim options
       numEvals = pNumEvals options
-  (evals :: MVector RealWorld (RealPart a)) <- MV.new numEvals
+  (evals :: MVector RealWorld (BlasRealPart a)) <- MV.new numEvals
   (evecs :: MVector RealWorld a) <- MV.new (dim * numEvals)
-  (rnorms :: MVector RealWorld (RealPart a)) <- MV.new numEvals
+  (rnorms :: MVector RealWorld (BlasRealPart a)) <- MV.new numEvals
   status <-
     MV.unsafeWith evals $ \evalsPtr ->
       MV.unsafeWith evecs $ \evecsPtr ->
@@ -236,7 +265,7 @@ eigh options matrix = do
             cPrimme evalsPtr evecsPtr rnormsPtr optionsPtr
   when (status /= 0) . throw . PrimmeException . T.pack $
     "?primme failed with error code " <> show status
-  evals' <- V.toList <$> V.unsafeFreeze evals
-  evecs' <- zipWith (\i xs -> V.slice (i * dim) dim xs) [0 .. pNumEvals options - 1] . repeat <$> V.unsafeFreeze evecs
-  rnorms' <- V.toList <$> V.unsafeFreeze rnorms
-  return $ zip3 evals' evecs' rnorms'
+  evals' <- V.unsafeFreeze evals
+  evecs' <- Block (dim, numEvals) dim <$> V.unsafeFreeze evecs
+  rnorms' <- V.unsafeFreeze rnorms
+  return (evals', evecs', rnorms')

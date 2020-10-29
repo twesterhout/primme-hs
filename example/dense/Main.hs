@@ -70,5 +70,5 @@ main = do
   -- y <- MV.new 4
   -- (pMatrix m) x y
   -- print =<< V.toList <$> V.unsafeFreeze y
-  [(evals, evecs, rnorms)] <- eigh (PrimmeOptions 3 1 PrimmeSmallest 1.0e-9) m
+  (evals, evecs, rnorms) <- eigh (PrimmeOptions 3 1 PrimmeSmallest 1.0e-9) m
   print evals
