@@ -10,10 +10,17 @@ license-file:        LICENSE
 author:              Tom Westerhout
 maintainer:          Tom Westerhout <14264576+twesterhout@users.noreply.github.com>
 copyright:           2020 Tom Westerhout
-build-type:          Simple
+build-type:          Custom
 extra-doc-files:     README.md
                      CHANGELOG.md
 tested-with:         GHC == 8.8.4
+
+flag use_system_libprimme
+  description:       Use libprimme that is installed in the system.
+  default:           False
+
+custom-setup
+  setup-depends: base >= 4.13.0.0 && < 5, Cabal >= 2.4, directory >= 1.2.1
 
 source-repository head
   type:                git
@@ -60,9 +67,9 @@ library
                      , Numeric.PRIMME.Internal
   extra-libraries:     primme
   include-dirs:        cbits
-                     , /home/tom/src/primme-hs/third_party/primme/include
-  extra-lib-dirs:      /home/tom/src/primme-hs/third_party/primme/lib
-  ld-options:          -Wl,-rpath /home/tom/src/primme-hs/third_party/primme/lib
+  --                    , /home/tom/src/primme-hs/third_party/primme/include
+  -- extra-lib-dirs:      /home/tom/src/primme-hs/third_party/primme/lib
+  -- ld-options:          -Wl,-rpath /home/tom/src/primme-hs/third_party/primme/lib
   pkgconfig-depends:   openblas
 
 executable example1
