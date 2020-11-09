@@ -24,7 +24,8 @@ main = defaultMainWithHooks hooks
     hooks =
       simpleUserHooks
         { preConf = buildLibPrimme,
-          confHook = \a f -> confHook simpleUserHooks a f >>= updateExtraLibDirs f,
+          confHook = \a f -> confHook simpleUserHooks a f >>= updateFinalDirs,
+          preBuild = updateLocalDirs,
           postCopy = copyLibPrimme,
           postClean = cleanLibPrimme
         }
@@ -38,24 +39,27 @@ buildLibPrimme _ flags = do
     rawSystemExit verbosity "./build_primme.sh" []
   return emptyHookedBuildInfo
 
-updateExtraLibDirs :: ConfigFlags -> LocalBuildInfo -> IO LocalBuildInfo
-updateExtraLibDirs flags localBuildInfo = do
+updateLocalDirs :: Args -> BuildFlags -> IO HookedBuildInfo
+updateLocalDirs _ flags = do
   dir <- getCurrentDirectory
-  let lib' =
-        lib
-          { libBuildInfo =
-              libBuild
-                { extraLibDirs = (dir <> "/third_party/primme/lib") : extraLibDirs libBuild,
-                  includeDirs = (dir <> "/third_party/primme/include") : includeDirs libBuild
-                }
+  let buildInfo =
+        emptyBuildInfo
+          { extraLibDirs = [dir <> "/third_party/primme/lib"],
+            includeDirs = [dir <> "/third_party/primme/include"]
           }
-  return localBuildInfo {localPkgDescr = packageDescription {library = Just $ lib'}}
+  return (Just buildInfo, [])
+
+updateFinalDirs :: LocalBuildInfo -> IO LocalBuildInfo
+updateFinalDirs localBuildInfo =
+  return localBuildInfo {localPkgDescr = packageDescription {library = Just lib'}}
   where
     packageDescription = localPkgDescr localBuildInfo
     lib = case library packageDescription of
       Just x -> x
       Nothing -> error "this should not have happened; did you remove the library target?"
     libBuild = libBuildInfo lib
+    libPref = libdir $ absoluteInstallDirs packageDescription localBuildInfo NoCopyDest
+    lib' = lib {libBuildInfo = libBuild {extraLibDirs = libPref : extraLibDirs libBuild}}
 
 copyLib :: ConfigFlags -> LocalBuildInfo -> FilePath -> IO ()
 copyLib flags _ libPref =
