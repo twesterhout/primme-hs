@@ -25,6 +25,7 @@ main = defaultMainWithHooks hooks
       simpleUserHooks
         { preConf = buildLibPrimme,
           confHook = \a f -> confHook simpleUserHooks a f >>= updateFinalDirs,
+          postConf = \_ _ _ _ -> return (),
           preBuild = updateLocalDirs,
           postCopy = copyLibPrimme,
           postClean = cleanLibPrimme
