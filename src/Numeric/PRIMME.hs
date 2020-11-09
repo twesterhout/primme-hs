@@ -49,7 +49,8 @@ module Numeric.PRIMME
 
     -- * Misc
     PrimmeException (..),
-    BlasDatatype (..),
+    BlasDatatype (blasTag, BlasRealPart),
+    BlasDatatypeTag (..),
     PrimmeDatatype,
   )
 where
