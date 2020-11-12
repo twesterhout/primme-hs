@@ -1,6 +1,7 @@
 module Numeric.PRIMME.Internal
-  ( PrimmeDatatype (..),
+  ( -- PrimmeDatatype (..),
     BlasDatatype (..),
+    BlasRealPart,
     BlasDatatypeTag (..),
     Cprimme_params,
     Cprimme_target (..),
@@ -19,6 +20,7 @@ module Numeric.PRIMME.Internal
     primme_params_destroy,
     sprimme,
     dprimme,
+    cPrimme,
     hemm,
   )
 where
@@ -70,8 +72,14 @@ type PrimmeInt = {#type wrap_primme_int#}
 {#fun unsafe primme_set_method { `Cprimme_preset_method', `Cprimme_params' } -> `CInt' #}
 -- {#fun wrap_primme_display_params as primme_display_params { `Cprimme_params' } -> `()' #}
 
-{#fun sprimme { id `Ptr CFloat', id `Ptr CFloat', id `Ptr CFloat', `Cprimme_params' } -> `CInt' id #}
-{#fun dprimme { id `Ptr CDouble', id `Ptr CDouble', id `Ptr CDouble', `Cprimme_params' } -> `CInt' id #}
+{#fun sprimme { castPtr' `Ptr Float', castPtr' `Ptr Float', castPtr' `Ptr Float', `Cprimme_params' } -> `CInt' id #}
+{#fun dprimme { castPtr' `Ptr Double', castPtr' `Ptr Double', castPtr' `Ptr Double', `Cprimme_params' } -> `CInt' id #}
+-- C2HS refuses to handle C99 complex types properly
+foreign import ccall "cprimme"
+  cprimme :: Ptr Float -> Ptr (Complex Float) -> Ptr Float -> Cprimme_params -> IO CInt
+
+foreign import ccall "zprimme"
+  zprimme :: Ptr Double -> Ptr (Complex Double) -> Ptr Double -> Cprimme_params -> IO CInt
 
 primme_set_dim :: Cprimme_params -> Int -> IO ()
 primme_set_dim p n
@@ -116,6 +124,30 @@ withCmatrixMatvec f = bracket (mkCmatrixMatvec f) freeHaskellFunPtr
 primme_set_matvec :: Cprimme_params -> FunPtr CmatrixMatvec -> IO ()
 primme_set_matvec = {#set primme_params.matrixMatvec#}
 
+
+data PrimmeInfo = PrimmeInfo
+  { primmeEvals :: Vector Double,
+    primmeNorms :: Vector Double,
+    primmeTime :: Double
+  }
+  deriving (Read, Show)
+
+-- void (*monitorFun)(void *basisEvals, int *basisSize, int *basisFlags, int *iblock,
+--                    int *blockSize, void *basisNorms, int *numConverged, void *lockedEvals,
+--                    int *numLocked, int *lockedFlags, void *lockedNorms, int *inner_its,
+--                    void *LSRes, const char *msg, double *time, primme_event *event,
+--                    struct primme_params *primme, int *ierr)
+type CmonitorFun = Ptr () -> Ptr CInt -> Ptr CInt -> Ptr CInt
+                -> Ptr CInt -> Ptr () -> Ptr CInt -> Ptr ()
+                -> Ptr CInt -> Ptr CInt -> Ptr () -> Ptr CInt
+                -> Ptr () -> Ptr CChar -> Ptr Double -> Ptr ()
+                -> Cprimme_params -> Ptr CInt -> IO ()
+
+-- foreign import ccall "wrapper"
+--   mkCmonitorFun
+
+
+
 -- | A GADT which allows to dispatch between BLAS types at runtime.
 data BlasDatatypeTag :: (Type -> Type) where
   FloatTag :: BlasDatatypeTag Float
@@ -123,43 +155,62 @@ data BlasDatatypeTag :: (Type -> Type) where
   ComplexFloatTag :: BlasDatatypeTag (Complex Float)
   ComplexDoubleTag :: BlasDatatypeTag (Complex Double)
 
+type family BlasRealPart a where
+  BlasRealPart Float = Float
+  BlasRealPart Double = Double
+  BlasRealPart (Complex Float) = Float
+  BlasRealPart (Complex Double) = Double
+
 -- | BLAS datatype.
-class (Storable a, Floating a) => BlasDatatype a where
-  type BlasRealPart a :: Type
+class ( Storable a, Storable (BlasRealPart a), Floating a, Floating (BlasRealPart a)) => BlasDatatype a where
+  -- type BlasRealPart a :: Type
   blasTag :: proxy a -> BlasDatatypeTag a
 
 instance BlasDatatype Float where
-  type BlasRealPart Float = Float
   blasTag _ = FloatTag
 
 instance BlasDatatype Double where
-  type BlasRealPart Double = Double
   blasTag _ = DoubleTag
 
 instance BlasDatatype (Complex Float) where
-  type BlasRealPart (Complex Float) = Float
   blasTag _ = ComplexFloatTag
 
 instance BlasDatatype (Complex Double) where
-  type BlasRealPart (Complex Double) = Double
   blasTag _ = ComplexDoubleTag
 
-class (BlasDatatype a, Storable (BlasRealPart a)) => PrimmeDatatype a where
-  cDatatype :: Proxy a -> Cprimme_op_datatype
-  cPrimme :: Ptr (BlasRealPart a) -> Ptr a -> Ptr (BlasRealPart a) -> Cprimme_params -> IO CInt
+-- class (BlasDatatype a, Storable (BlasRealPart a)) => PrimmeDatatype a where
+  -- cDatatype :: Proxy a -> Cprimme_op_datatype
+  -- cPrimme :: Ptr (BlasRealPart a) -> Ptr a -> Ptr (BlasRealPart a) -> Cprimme_params -> IO CInt
 
 -- | A safer alternative to 'castPtr'. Typical usage example is converting 'Ptr CFloat' to
 -- 'Ptr Float', but making sure we don't accidentally pass 'Ptr CDouble' instead.
 castPtr' :: Coercible a b => Ptr a -> Ptr b
 castPtr' = castPtr
 
-instance PrimmeDatatype Float where
-  cDatatype _ = Cprimme_op_float
-  cPrimme evals evecs rnorms params = sprimme (castPtr' evals) (castPtr' evecs) (castPtr' rnorms) params
 
-instance PrimmeDatatype Double where
-  cDatatype _ = Cprimme_op_double
-  cPrimme evals evecs rnorms params = dprimme (castPtr' evals) (castPtr' evecs) (castPtr' rnorms) params
+cPrimme :: forall a. (BlasDatatype a, Storable (BlasRealPart a))
+  => Ptr (BlasRealPart a) -> Ptr a -> Ptr (BlasRealPart a) -> Cprimme_params -> IO CInt
+cPrimme = case blasTag (Proxy :: Proxy a) of
+  FloatTag -> sprimme
+  DoubleTag -> dprimme
+  ComplexFloatTag -> cprimme
+  ComplexDoubleTag -> zprimme
+
+-- instance PrimmeDatatype Float where
+  -- cDatatype _ = Cprimme_op_float
+  -- cPrimme evals evecs rnorms params = sprimme (castPtr' evals) (castPtr' evecs) (castPtr' rnorms) params
+
+-- instance PrimmeDatatype Double where
+  -- cDatatype _ = Cprimme_op_double
+  -- cPrimme evals evecs rnorms params = dprimme (castPtr' evals) (castPtr' evecs) (castPtr' rnorms) params
+
+-- instance PrimmeDatatype (Complex Float) where
+  -- cDatatype _ = Cprimme_op_float
+  -- cPrimme = cprimme
+
+-- instance PrimmeDatatype (Complex Double) where
+  -- cDatatype _ = Cprimme_op_float
+  -- cPrimme = zprimme
 
 type BlasInt = CInt
 

@@ -49,9 +49,9 @@ module Numeric.PRIMME
 
     -- * Misc
     PrimmeException (..),
-    BlasDatatype (blasTag, BlasRealPart),
+    BlasDatatype (blasTag),
+    BlasRealPart,
     BlasDatatypeTag (..),
-    PrimmeDatatype,
   )
 where
 
@@ -211,7 +211,7 @@ data PrimmeOptions = PrimmeOptions
     pEps :: Double
   }
 
-withOptions :: PrimmeDatatype a => PrimmeOptions -> PrimmeOperator a -> (Cprimme_params -> IO b) -> IO b
+withOptions :: BlasDatatype a => PrimmeOptions -> PrimmeOperator a -> (Cprimme_params -> IO b) -> IO b
 withOptions opts apply func = bracket acquire release worker
   where
     acquire = do
@@ -232,7 +232,7 @@ withOptions opts apply func = bracket acquire release worker
       withOperator apply $ \matvecPtr ->
         primme_set_matvec p matvecPtr >> func p
 
-withOperator :: PrimmeDatatype a => PrimmeOperator a -> (FunPtr CmatrixMatvec -> IO b) -> IO b
+withOperator :: BlasDatatype a => PrimmeOperator a -> (FunPtr CmatrixMatvec -> IO b) -> IO b
 withOperator !f = withCmatrixMatvec cWrapper
   where
     cWrapper !xPtr !xStridePtr !yPtr !yStridePtr !blockSizePtr !params !errPtr = do
@@ -251,7 +251,12 @@ withOperator !f = withCmatrixMatvec cWrapper
       (f x y >> poke errPtr 0) `catch` (\(_ :: SomeException) -> poke errPtr (-1))
 
 -- | Diagonalize the operator to find the first few eigenpairs.
-eigh :: forall a. PrimmeDatatype a => PrimmeOptions -> PrimmeOperator a -> IO (Vector (BlasRealPart a), Block a, Vector (BlasRealPart a))
+eigh ::
+  forall a.
+  BlasDatatype a =>
+  PrimmeOptions ->
+  PrimmeOperator a ->
+  IO (Vector (BlasRealPart a), Block a, Vector (BlasRealPart a))
 eigh options matrix = do
   let dim = pDim options
       numEvals = pNumEvals options
