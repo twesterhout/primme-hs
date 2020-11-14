@@ -42,6 +42,7 @@ module Numeric.PRIMME
     -- | Having defined a 'PrimmeOperator' we now need to tell PRIMME what to
     -- compute. This is done by constructing a 'PrimmeOptions' object.
     PrimmeOptions (..),
+    defaultOptions,
     PrimmeTarget (..),
 
     -- * Diagonalizing
@@ -55,8 +56,9 @@ module Numeric.PRIMME
   )
 where
 
-import Control.Exception (Exception, SomeException, bracket, catch, throw)
-import Control.Monad (when)
+import Control.Exception.Safe (Exception, MonadThrow, SomeException, bracket, catch, impureThrow, throw)
+import Control.Monad (unless, when)
+import Control.Monad.IO.Class
 import Control.Monad.ST (RealWorld)
 import qualified Data.Complex
 import Data.Proxy
@@ -70,12 +72,6 @@ import Foreign.ForeignPtr
 import Foreign.Ptr (FunPtr, castPtr, nullPtr)
 import Foreign.Storable
 import Numeric.PRIMME.Internal
-
--- | Exceptions thrown by this package.
-newtype PrimmeException = PrimmeException Text
-  deriving (Show)
-
-instance Exception PrimmeException
 
 -- | Mutable dense matrix in column-major order.
 data MBlock s a = MBlock
@@ -130,11 +126,11 @@ fromDense ::
   PrimmeOperator a
 fromDense dim stride matrix
   | stride * dim /= V.length matrix =
-    throw . PrimmeException . T.pack $
+    impureThrow . PrimmeException . T.pack $
       "dimension mismatch: expected " <> show stride <> " * " <> show dim
         <> " elements, but the buffer has length "
         <> show (V.length matrix)
-  | not (isHermitian a) = throw . PrimmeException $ "expected a Hermitian matrix"
+  | not (isHermitian a) = impureThrow . PrimmeException $ "expected a Hermitian matrix"
   | otherwise = \b c -> blockHemm 1 a b 0 c
   where
     a = Block (dim, dim) stride matrix
@@ -208,29 +204,67 @@ data PrimmeOptions = PrimmeOptions
     -- | Which eigenpairs to target
     pTarget :: PrimmeTarget,
     -- | Tolerance
-    pEps :: Double
+    pEps :: Double,
+    -- |
+    pMaxBasisSize :: Int,
+    -- |
+    pMaxBlockSize :: Int
   }
 
+defaultOptions :: PrimmeOptions
+defaultOptions =
+  PrimmeOptions
+    { pDim = -1,
+      pNumEvals = 1,
+      pTarget = PrimmeSmallest,
+      pEps = 0.0,
+      pMaxBasisSize = -1,
+      pMaxBlockSize = -1
+    }
+
+initOptions :: (MonadIO m, MonadThrow m) => PrimmeOptions -> Cprimme_params -> m ()
+initOptions options c_options = do
+  when (pDim options == -1) . throw . PrimmeException $
+    "pDim in PrimmeOptions is equal to the default value -1; please, set it "
+      <> "to the dimension of your operator prior to calling eigh"
+  when (pDim options <= 0) . throw . PrimmeException . T.pack $
+    "pDim in PrimmeOptions is invalid: " <> show (pDim options) <> "; expected a positive integer"
+  liftIO $ primme_set_dim c_options (pDim options)
+  --
+  when (pNumEvals options <= 0) . throw . PrimmeException . T.pack $
+    "pNumEvals in PrimmeOptions is invalid: " <> show (pNumEvals options) <> "; expected a positive integer"
+  when (pNumEvals options > pDim options) . throw . PrimmeException . T.pack $
+    "pNumEvals in PrimmeOptions is invalid: " <> show (pNumEvals options)
+      <> "; number of eigenpairs cannot exceed the dimension of the operator"
+  liftIO $ primme_set_num_evals c_options (pNumEvals options)
+  --
+  liftIO $ primme_set_target c_options (toCprimme_target . pTarget $ options)
+  --
+  when (pEps options < 0.0) . throw . PrimmeException . T.pack $
+    "pEps in PrimmeOptions is invalid: " <> show (pEps options) <> "; expected a non-negative number"
+  liftIO $ primme_set_eps c_options (pEps options)
+  --
+  liftIO $ primme_set_print_level c_options 5
+  --
+  unless (pMaxBasisSize options == -1) $ do
+    when (pMaxBasisSize options < 2) . throw . PrimmeException . T.pack $
+      "pMaxBasisSize in PrimmeOptions is invalid: " <> show (pMaxBasisSize options)
+        <> "; basis size must be at least 2"
+    liftIO $ primme_set_max_basis_size c_options (pMaxBasisSize options)
+  --
+  unless (pMaxBlockSize options == -1) $ do
+    when (pMaxBlockSize options <= 0) . throw . PrimmeException . T.pack $
+      "pMaxBlockSize in PrimmeOptions is invalid: " <> show (pMaxBlockSize options)
+        <> "; expected a positive integer"
+    liftIO $ primme_set_max_block_size c_options (pMaxBlockSize options)
+  --
+  liftIO $ primme_set_method Cprimme_DEFAULT_MIN_MATVECS c_options
+
 withOptions :: BlasDatatype a => PrimmeOptions -> PrimmeOperator a -> (Cprimme_params -> IO b) -> IO b
-withOptions opts apply func = bracket acquire release worker
-  where
-    acquire = do
-      p <- primme_params_create
-      when (p == nullPtr) $ error "failed to allocate primme_params struct"
-      return p
-    release p = do
-      c <- primme_params_destroy p
-      when (c /= 0) $ error "failed to destroy primme_params struct"
-    worker p = do
-      primme_set_dim p (pDim opts)
-      primme_set_num_evals p (pNumEvals opts)
-      primme_set_target p (toCprimme_target . pTarget $ opts)
-      primme_set_eps p (pEps opts)
-      primme_set_print_level p 5
-      c <- primme_set_method PRIMME_DEFAULT_MIN_MATVECS p
-      when (c /= 0) $ error "failed to set method"
-      withOperator apply $ \matvecPtr ->
-        primme_set_matvec p matvecPtr >> func p
+withOptions opts apply func = bracket primme_params_create primme_params_destroy $ \p -> do
+  initOptions opts p
+  withOperator apply $ \matvecPtr ->
+    primme_set_matvec p matvecPtr >> func p
 
 withOperator :: BlasDatatype a => PrimmeOperator a -> (FunPtr CmatrixMatvec -> IO b) -> IO b
 withOperator !f = withCmatrixMatvec cWrapper
@@ -263,14 +297,12 @@ eigh options matrix = do
   (evals :: MVector RealWorld (BlasRealPart a)) <- MV.new numEvals
   (evecs :: MVector RealWorld a) <- MV.new (dim * numEvals)
   (rnorms :: MVector RealWorld (BlasRealPart a)) <- MV.new numEvals
-  status <-
+  _ <- (checkError =<<) $
     MV.unsafeWith evals $ \evalsPtr ->
       MV.unsafeWith evecs $ \evecsPtr ->
         MV.unsafeWith rnorms $ \rnormsPtr ->
           withOptions options matrix $ \optionsPtr ->
             cPrimme evalsPtr evecsPtr rnormsPtr optionsPtr
-  when (status /= 0) . throw . PrimmeException . T.pack $
-    "?primme failed with error code " <> show status
   evals' <- V.unsafeFreeze evals
   evecs' <- Block (dim, numEvals) dim <$> V.unsafeFreeze evecs
   rnorms' <- V.unsafeFreeze rnorms

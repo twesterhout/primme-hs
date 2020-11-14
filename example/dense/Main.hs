@@ -66,9 +66,11 @@ main :: IO ()
 main = do
   putStrLn "Hello world!"
   let m = toPrimme ex1
+      o = defaultOptions {pDim = 3, pNumEvals = 1, pTarget = PrimmeSmallest, pEps = 1.0e-9}
   --     x = V.fromList [1.0, -2.0, 0.5]
   -- y <- MV.new 4
   -- (pMatrix m) x y
   -- print =<< V.toList <$> V.unsafeFreeze y
-  (evals, evecs, rnorms) <- eigh (PrimmeOptions 3 1 PrimmeSmallest 1.0e-9) m
+
+  (evals, evecs, rnorms) <- eigh o m
   print evals
