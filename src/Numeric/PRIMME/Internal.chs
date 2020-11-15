@@ -67,10 +67,11 @@ getErrorMessage c = case (- c) of
       <> "number of eigenpairs is positive"
   23 -> "number of initial vectors exceeds the maximum basis size"
   24 -> "number of initial vectors exceeds the number of requested eigenpairs"
+  25 -> "maximum basis size is too small (maxPrevRetain + minRestartSize >= maxBasisSize)"
   40 -> "some LAPACK factorization function failed; try increasing verbosity to see the stacktrace"
   41 -> "some user defined function failed; try increasing verbosity to see the stacktrace"
   _ ->
-    "primme failed with error code " <> T.pack (show (- c)) <> "; this should not have "
+    "primme failed with error code " <> T.pack (show c) <> "; this should not have "
       <> "happened and it is likely a bug in primme-hs package; please, report it"
 
 -- | Exceptions thrown by this package.
