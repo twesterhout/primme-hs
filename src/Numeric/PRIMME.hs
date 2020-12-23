@@ -49,6 +49,7 @@ module Numeric.PRIMME
     eigh,
 
     -- * Misc
+    isHermitian,
     PrimmeException (..),
     BlasDatatype (blasTag),
     BlasRealPart,
@@ -180,6 +181,9 @@ conj = case blasTag (Proxy :: Proxy a) of
 {-# INLINE conj #-}
 
 -- | Which eigenpairs to target.
+--
+-- /Note:/ PRIMME C library also supports computing non-extremal eigenvalues.
+-- Wrappers for it may be added in the future.
 data PrimmeTarget
   = -- | Target smallest algebraic eigenvalues
     PrimmeSmallest
@@ -205,9 +209,9 @@ data PrimmeOptions = PrimmeOptions
     pTarget :: PrimmeTarget,
     -- | Tolerance
     pEps :: Double,
-    -- |
+    -- | Maximal basis size. [See also](http://www.cs.wm.edu/~andreas/software/doc/appendix.html#c.primme_params.maxBasisSize)
     pMaxBasisSize :: Int,
-    -- |
+    -- | Maximal block size. [See also](http://www.cs.wm.edu/~andreas/software/doc/appendix.html#c.primme_params.maxBlockSize)
     pMaxBlockSize :: Int
   }
 
