@@ -1,6 +1,6 @@
 cabal-version:       2.4
 name:                primme-hs
-version:             0.0.0.0
+version:             0.0.1.0
 synopsis:            Haskell wrapper for PRIMME library
 description:         Haskell wrapper for PRIMME library
 homepage:            https://github.com/twesterhout/primme-hs
@@ -68,9 +68,6 @@ library
                      , Numeric.PRIMME.Internal
   extra-libraries:     primme
   include-dirs:        cbits
-  --                    , /home/tom/src/primme-hs/third_party/primme/include
-  -- extra-lib-dirs:      /home/tom/src/primme-hs/third_party/primme/lib
-  -- ld-options:          -Wl,-rpath /home/tom/src/primme-hs/third_party/primme/lib
   pkgconfig-depends:   openblas
 
 executable example1
