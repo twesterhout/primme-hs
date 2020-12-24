@@ -35,9 +35,10 @@ buildLibPrimme :: Args -> ConfigFlags -> IO HookedBuildInfo
 buildLibPrimme _ flags = do
   let verbosity = fromFlag $ configVerbosity flags
       useSystem = getCabalFlag "use_system_libprimme" flags
+  dir <- getCurrentDirectory
   unless useSystem $ do
     notice verbosity "Building libprimme.a C library..."
-    rawSystemExit verbosity "./build_primme.sh" []
+    rawSystemExit verbosity (dir <> "/build_primme.sh") []
   return emptyHookedBuildInfo
 
 -- updateLocalDirs :: Args -> BuildFlags -> IO HookedBuildInfo
