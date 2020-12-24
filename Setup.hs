@@ -38,7 +38,7 @@ buildLibPrimme _ flags = do
   dir <- getCurrentDirectory
   unless useSystem $ do
     notice verbosity "Building libprimme.a C library..."
-    rawSystemExit verbosity "./build_primme.sh" []
+    rawSystemExit verbosity "bash" ["build_primme.sh"]
   return emptyHookedBuildInfo
 
 -- updateLocalDirs :: Args -> BuildFlags -> IO HookedBuildInfo
