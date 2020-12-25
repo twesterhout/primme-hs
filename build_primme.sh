@@ -8,13 +8,22 @@ BUILD=1
 while [[ $# -gt 0 ]]; do
 	key="$1"
 	case $key in
-		--test) TEST=1; shift; ;;
-		--verbose) VERBOSE=1; shift; ;;
-		--clean) BUILD=0; shift; ;;
-		*)
-			echo "Unknown argument: $1"
-			echo "Usage: ./build_primme.sh [--test] [--verbose] [--clean]"
-			exit 1
+	--test)
+		TEST=1
+		shift
+		;;
+	--verbose)
+		VERBOSE=1
+		shift
+		;;
+	--clean)
+		BUILD=0
+		shift
+		;;
+	*)
+		echo "Unknown argument: $1"
+		echo "Usage: ./build_primme.sh [--test] [--verbose] [--clean]"
+		exit 1
 		;;
 	esac
 done
@@ -42,7 +51,7 @@ if [ $BUILD -eq 1 ]; then
 	export LDFLAGS="-Wl,-z,defs $(pkg-config --libs openblas) -lm"
 	export LIBS="$LDFLAGS"
 	export PRIMME_WITH_HALF=no PRIMME_WITH_FLOAT=yes
-	run_make -j$(nproc) lib 
+	run_make -j$(nproc) lib
 	[ $TEST -eq 1 ] && run_make test
 	run_make install
 	cp $([ $VERBOSE -eq 1 ] && echo "-v") "lib/libprimme.a" "${PREFIX}/lib"
