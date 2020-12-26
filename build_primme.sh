@@ -44,11 +44,27 @@ fi
 tar xf "v${PRIMME_VERSION}.tar.gz"
 cd "primme-${PRIMME_VERSION}"
 
+
+find_blas() {
+	if [[ "$OSTYPE" == "linux-gnu"* ]]; then
+		echo "Running on Linux..."
+		echo "Using pkg-config to find openblas"
+		export CFLAGS="$(pkg-config --cflags openblas)"
+		export LDFLAGS="$(pkg-config --libs openblas) -lm"
+	elif [[ "$OSTYPE" == "darwin"* ]]; then
+		echo "Running on OSX..."
+		export LDFLAGS="-Wl,-framework -Wl,Accelerate -m64"
+	fi
+}
+
+
+
+
 if [ $BUILD -eq 1 ]; then
-	export CFLAGS="$(pkg-config --cflags openblas)"
-	export CFLAGS="$CFLAGS -O3 -march=nocona -mtune=ivybridge -fPIC -DNDEBUG -DPRIMME_BLASINT_SIZE=32 -DPRIMME_INT_SIZE=64"
-	export FFLAGS="-fno-second-underscore -O3 -march=nocona -mtune=ivybridge"
-	export LDFLAGS="-Wl,-z,defs $(pkg-config --libs openblas) -lm"
+	find_blas
+	export CFLAGS="$CFLAGS -O3 -march=nocona -mtune=haswell -fPIC -DNDEBUG -DPRIMME_BLASINT_SIZE=32 -DPRIMME_INT_SIZE=64"
+	export FFLAGS="-fno-second-underscore -O3 -march=nocona -mtune=haswell"
+	export LDFLAGS="-Wl,-z,defs $LDFLAGS"
 	export LIBS="$LDFLAGS"
 	export PRIMME_WITH_HALF=no PRIMME_WITH_FLOAT=yes
 	run_make -j$(nproc) lib

@@ -9,12 +9,12 @@ on:
 jobs:
   build:
     name: ghc ${{ matrix.ghc }}
-    runs-on: ubuntu-latest
+    runs-on: [ubuntu-latest, macos-latest]
     strategy:
       matrix:
-        cabal: ["3.0.0.0"]
-        ghc:
-          - "8.8.4"
+        include:
+          - cabal: "3.0.0.0"
+          - ghc: "8.8.4"
 
     steps:
     - uses: actions/checkout@v2
@@ -33,6 +33,7 @@ jobs:
         key: ${{ runner.os }}-${{ matrix.ghc }}-cabal
 
     - name: Install OpenBLAS
+      if: runner.os == 'linux'
       run: |
         sudo apt-get update
         sudo apt-get install -y --no-install-recommends libopenblas-dev
@@ -40,8 +41,9 @@ jobs:
     - name: Build
       run: |
         cabal v2-update
-        cabal v2-build --enable-tests --enable-benchmarks
+        ./build_primme.sh --verbose
+        # cabal v2-build --enable-tests --enable-benchmarks
 
-    - name: Test
-      run: |
-        cabal v2-test --enable-tests --test-show-details=direct
+        # - name: Test
+        #   run: |
+        #     cabal v2-test --enable-tests --test-show-details=direct

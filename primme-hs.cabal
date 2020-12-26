@@ -70,7 +70,7 @@ library
                      , Numeric.PRIMME.Internal
   extra-libraries:     primme
   include-dirs:        cbits
-  pkgconfig-depends:   openblas
+  -- pkgconfig-depends:   openblas
 
 executable example1
   import:              common-options
