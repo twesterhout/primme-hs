@@ -37,7 +37,7 @@ PRIMME_VERSION=3.1.1
 export PREFIX="$PWD/third_party/primme"
 WORKDIR="$PWD/third_party/build"
 
-echo "OSTYPE=$OSTYPE ..."
+[ $VERBOSE -eq 1 ] && echo "Running on $OSTYPE..."
 if [[ "$OSTYPE" == "darwin"* ]]; then
 	NPROC=$(sysctl -n hw.logicalcpu)
 else
@@ -67,6 +67,7 @@ if [ $BUILD -eq 1 ]; then
 	else
 		rm $([ $VERBOSE -eq 1 ] && echo "-v") "${PREFIX}"/lib/libprimme.so*
 	fi
+	[ $VERBOSE -eq 1 ] && ls -l "${PREFIX}/lib"
 else
 	run_make clean
 fi

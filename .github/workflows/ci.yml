@@ -36,22 +36,21 @@ jobs:
         path: ~/.cabal/store
         key: ${{ runner.os }}-${{ matrix.ghc }}-cabal
 
-    - name: Get system info
-      run: |
-        echo ${{ runner.os }}
-        echo ${{ matrix.os }}
     - name: Install OpenBLAS
-      if: runner.os == 'linux'
+      if: runner.os == 'Linux'
       run: |
         sudo apt-get update
         sudo apt-get install -y --no-install-recommends libopenblas-dev
 
-    - name: Build
+    - name: Cabal dependencies
       run: |
         cabal v2-update
-        ./build_primme.sh --verbose
-        # cabal v2-build --enable-tests --enable-benchmarks
+        cabal v2-build --dependencies-only
 
-        # - name: Test
-        #   run: |
-        #     cabal v2-test --enable-tests --test-show-details=direct
+    - name: Build
+      run: |
+        cabal v2-build --verbose --enable-tests --enable-benchmarks
+
+    - name: Test
+      run: |
+        cabal v2-test --enable-tests --test-show-details=direct
