@@ -1,35 +1,45 @@
-cabal-version:       2.4
-name:                primme-hs
-version:             0.0.1.0
-synopsis:            Haskell wrapper for PRIMME library
-description:         Haskell wrapper for PRIMME library
-homepage:            https://github.com/twesterhout/primme-hs
-bug-reports:         https://github.com/twesterhout/primme-hs/issues
-license:             BSD-3-Clause
-license-file:        LICENSE
-author:              Tom Westerhout
-maintainer:          Tom Westerhout <14264576+twesterhout@users.noreply.github.com>
-copyright:           2020 Tom Westerhout
-build-type:          Custom
-extra-doc-files:     README.md
-                     CHANGELOG.md
-tested-with:         GHC == 8.8.4
-extra-source-files:  build_primme.sh
-                     cbits/wrapper.h
+cabal-version:         2.4
+name:                  primme-hs
+version:               0.0.1.0
+synopsis:              Haskell wrapper for PRIMME library
+description:           Haskell wrapper for PRIMME library
+homepage:              https://github.com/twesterhout/primme-hs
+bug-reports:           https://github.com/twesterhout/primme-hs/issues
+license:               BSD-3-Clause
+license-file:          LICENSE
+author:                Tom Westerhout
+maintainer:            Tom Westerhout <14264576+twesterhout@users.noreply.github.com>
+copyright:             2020 Tom Westerhout
+build-type:            Custom
+extra-doc-files:       README.md
+                       CHANGELOG.md
+tested-with:           GHC == 8.8.4
+extra-source-files:    build_primme.sh
+                       cbits/wrapper.h
 
 flag use_system_libprimme
-  description:       Use libprimme that is installed in the system.
-  default:           False
+  description:         Use libprimme that is installed in the system.
+  default:             False
+
+flag use_openblas
+  description:         Link with OpenBLAS library.
+  default:             True
+
+flag use_accelerate
+  description:         Link with the Accelerate Framework.
+  default:             True
+
+
 
 custom-setup
-  setup-depends: base >= 4.13.0.0 && < 5, Cabal >= 2.4, directory >= 1.2.1
+  setup-depends:       base >= 4.13.0.0 && < 5, Cabal >= 2.4, directory >= 1.2.1
 
 source-repository head
   type:                git
   location:            https://github.com/twesterhout/primme-hs.git
 
 common common-options
-  build-depends:       base ^>= 4.13.0.0
+  build-depends:       base >= 4.13.0.0 && < 5
                      , vector
                      , text
                      , safe-exceptions
@@ -70,14 +80,22 @@ library
                      , Numeric.PRIMME.Internal
   extra-libraries:     primme
   include-dirs:        cbits
-  -- pkgconfig-depends:   openblas
+
+  if (os(darwin) || os(osx)) && flag(use_accelerate)
+      frameworks:      Accelerate
+  else
+    if flag(use_openblas)
+      extra-libraries: openblas
+    else
+      extra-libraries: lapack
+                       blas
+
 
 executable example1
   import:              common-options
   hs-source-dirs:      example/dense
   main-is:             Main.hs
   build-depends:       primme-hs
-                     , vector
 
 test-suite primme-hs-test
   import:              common-options
