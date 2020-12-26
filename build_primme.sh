@@ -3,10 +3,6 @@
 set -e
 set -o pipefail
 
-if [[ "$OSTYPE" == "darwin"* ]]; then
-	alias nproc="sysctl -n hw.logicalcpu"
-fi
-
 TEST=0
 VERBOSE=0
 BUILD=1
@@ -41,6 +37,13 @@ PRIMME_VERSION=3.1.1
 export PREFIX="$PWD/third_party/primme"
 WORKDIR="$PWD/third_party/build"
 
+echo "OSTYPE=$OSTYPE ..."
+if [[ "$OSTYPE" == "darwin"* ]]; then
+	NPROC=$(sysctl -n hw.logicalcpu)
+else
+	NPROC=$(nproc)
+fi
+
 mkdir -p "$WORKDIR" && cd "$WORKDIR"
 if [ ! -f "v${PRIMME_VERSION}.tar.gz" ]; then
 	[ $VERBOSE -eq 1 ] && echo "Downloading primme-${PRIMME_VERSION} ..."
@@ -54,7 +57,7 @@ if [ $BUILD -eq 1 ]; then
 	export FFLAGS="-fno-second-underscore -O3 -march=nocona -mtune=haswell"
 	export LIBS="$LDFLAGS"
 	export PRIMME_WITH_HALF=no PRIMME_WITH_FLOAT=yes
-	run_make -j$(nproc) lib
+	run_make -j$NPROC lib
 	[ $TEST -eq 1 ] && run_make test
 	run_make install
 	cp $([ $VERBOSE -eq 1 ] && echo "-v") "lib/libprimme.a" "${PREFIX}/lib"
