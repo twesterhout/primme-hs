@@ -3,6 +3,14 @@
 set -e
 set -o pipefail
 
+SCRIPT_DIR="$(
+	cd "$(dirname "$0")"
+	pwd -P
+)"
+PROJECT_DIR="$(
+	cd "${SCRIPT_DIR}"
+	pwd -P
+)"
 TEST=0
 VERBOSE=0
 BUILD=1
@@ -51,6 +59,9 @@ if [ ! -f "v${PRIMME_VERSION}.tar.gz" ]; then
 fi
 tar xf "v${PRIMME_VERSION}.tar.gz"
 cd "primme-${PRIMME_VERSION}"
+if [[ "$OSTYPE" == "darwin"* ]]; then
+	patch -u "${PROJECT_DIR}/cbits/primme.h.patch" include/primme.h
+fi
 
 if [ $BUILD -eq 1 ]; then
 	export CFLAGS="-O3 -march=nocona -mtune=haswell -fPIC -DNDEBUG -DPRIMME_BLASINT_SIZE=32 -DPRIMME_INT_SIZE=64"
