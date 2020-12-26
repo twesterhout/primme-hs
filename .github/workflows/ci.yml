@@ -8,13 +8,17 @@ on:
 
 jobs:
   build:
-    name: ghc ${{ matrix.ghc }}
-    runs-on: [ubuntu-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    name: ${{ matrix.os }} ghc-${{ matrix.ghc }}
     strategy:
       matrix:
         include:
-          - cabal: "3.0.0.0"
-          - ghc: "8.8.4"
+          - os: ubuntu-latest
+            cabal: "3.0.0.0"
+            ghc: "8.8.4"
+          - os: macos-latest
+            cabal: "3.0.0.0"
+            ghc: "8.8.4"
 
     steps:
     - uses: actions/checkout@v2
@@ -32,6 +36,10 @@ jobs:
         path: ~/.cabal/store
         key: ${{ runner.os }}-${{ matrix.ghc }}-cabal
 
+    - name: Get system info
+      run: |
+        echo ${{ runner.os }}
+        echo ${{ matrix.os }}
     - name: Install OpenBLAS
       if: runner.os == 'linux'
       run: |
