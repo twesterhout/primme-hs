@@ -1,5 +1,3 @@
---- third_party/build/primme-3.1.1/include/primme.h	2020-05-04 03:52:54.000000000 +0200
-+++ primme_patched.h	2020-12-26 16:05:01.868288910 +0100
 @@ -41,13 +41,8 @@
  #define PRIMME_VERSION_MAJOR      3
  #define PRIMME_VERSION_MINOR      1
@@ -15,4 +13,3 @@
 +#define PRIMME_HALF struct _primme_half
  
  #define PRIMME_QUAD double long
- 
