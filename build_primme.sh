@@ -50,7 +50,6 @@ tar xf "v${PRIMME_VERSION}.tar.gz"
 cd "primme-${PRIMME_VERSION}"
 
 if [ $BUILD -eq 1 ]; then
-	find_blas
 	export CFLAGS="-O3 -march=nocona -mtune=haswell -fPIC -DNDEBUG -DPRIMME_BLASINT_SIZE=32 -DPRIMME_INT_SIZE=64"
 	export FFLAGS="-fno-second-underscore -O3 -march=nocona -mtune=haswell"
 	export LIBS="$LDFLAGS"
