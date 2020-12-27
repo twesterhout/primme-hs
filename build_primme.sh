@@ -60,7 +60,7 @@ fi
 tar xf "v${PRIMME_VERSION}.tar.gz"
 cd "primme-${PRIMME_VERSION}"
 if [[ "$OSTYPE" == "darwin"* ]]; then
-	patch --verbose -u "${PROJECT_DIR}/cbits/primme.h.patch" include/primme.h
+	patch -u include/primme.h "${PROJECT_DIR}/cbits/primme.h.patch"
 fi
 
 if [ $BUILD -eq 1 ]; then

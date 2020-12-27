@@ -16,6 +16,7 @@ extra-doc-files:       README.md
 tested-with:           GHC == 8.8.4
 extra-source-files:    build_primme.sh
                        cbits/wrapper.h
+                       cbits/primme.h.patch
 
 flag use_system_libprimme
   description:         Use libprimme that is installed in the system.
