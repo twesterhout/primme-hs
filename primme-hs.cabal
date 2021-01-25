@@ -19,7 +19,7 @@ extra-source-files:    build_primme.sh
                        cbits/primme.h.patch
 
 flag use_system_libprimme
-  description:         Use libprimme that is installed in the system.
+  description:         Use libprimme that is installed on the system.
   default:             False
 
 flag use_openblas

@@ -1,5 +1,6 @@
 module Numeric.PRIMME.Internal
-  ( PrimmeException (..),
+  ( getPrimmeVersion,
+    PrimmeException (..),
     checkError,
     BlasDatatype (..),
     BlasRealPart,
@@ -15,6 +16,7 @@ module Numeric.PRIMME.Internal
     primme_set_eps,
     primme_set_target,
     primme_set_max_basis_size,
+    primme_set_min_restart_size,
     primme_set_max_block_size,
     primme_set_method,
     primme_set_matvec,
@@ -28,22 +30,24 @@ module Numeric.PRIMME.Internal
   )
 where
 
-import Control.Exception (Exception, throw, bracket)
+import Control.Exception (Exception, bracket, throw)
 import Control.Monad
 import Control.Monad.ST (RealWorld)
-import Data.Complex (Complex)
 import Data.Coerce
-import Data.Proxy
+import Data.Complex (Complex)
 import Data.Kind
+import Data.Proxy
 import Data.Text (Text)
 import qualified Data.Text as T
 import Data.Vector.Storable (MVector, Vector)
 import qualified Data.Vector.Storable as V
 import qualified Data.Vector.Storable.Mutable as MV
-import Foreign.Storable
-import Foreign.C.Types (CChar, CInt, CFloat, CDouble, CLong)
-import Foreign.Ptr (Ptr, castPtr, nullPtr, FunPtr, freeHaskellFunPtr)
+import Foreign.C.Types (CChar, CDouble, CFloat, CInt, CLong)
+import Foreign.Marshal.Alloc (alloca)
 import Foreign.Marshal.Utils
+import Foreign.Ptr (FunPtr, Ptr, castPtr, freeHaskellFunPtr, nullPtr)
+import Foreign.Storable
+import System.IO.Unsafe (unsafePerformIO)
 
 #include <primme.h>
 #include "wrapper.h"
@@ -74,6 +78,14 @@ getErrorMessage c = case (- c) of
     "primme failed with error code " <> T.pack (show c) <> "; this should not have "
       <> "happened and it is likely a bug in primme-hs package; please, report it"
 
+{#fun wrap_primme_get_version { id `Ptr CInt', id `Ptr CInt' } -> `()' #}
+
+getPrimmeVersion :: (Int, Int)
+getPrimmeVersion = unsafePerformIO $
+  alloca $ \ptrMajor -> alloca $ \ptrMinor -> do
+    wrap_primme_get_version ptrMajor ptrMinor
+    (,) <$> (fromIntegral <$> peek ptrMajor) <*> (fromIntegral <$> peek ptrMinor)
+
 -- | Exceptions thrown by this package.
 newtype PrimmeException = PrimmeException Text
   deriving (Show)
@@ -101,8 +113,8 @@ type PrimmeInt = {#type wrap_primme_int#}
       | ptr == nullPtr = throw $ PrimmeException "failed to allocate primme_params struct"
       | otherwise = return ptr
 {#fun unsafe primme_params_destroy { `Cprimme_params' } -> `()' checkError*- #}
+
 {#fun unsafe primme_set_method { `Cprimme_preset_method', `Cprimme_params' } -> `()' checkError*- #}
--- {#fun wrap_primme_display_params as primme_display_params { `Cprimme_params' } -> `()' #}
 
 primme_set_dim :: Cprimme_params -> Int -> IO ()
 primme_set_dim p = {#set primme_params.n#} p . fromIntegral
@@ -124,6 +136,9 @@ primme_set_eps p eps = {#set primme_params.eps#} p (coerce eps)
 
 primme_set_max_basis_size :: Cprimme_params -> Int -> IO ()
 primme_set_max_basis_size p = {#set primme_params.maxBasisSize#} p . fromIntegral
+
+primme_set_min_restart_size :: Cprimme_params -> Int -> IO ()
+primme_set_min_restart_size p = {#set primme_params.minRestartSize#} p . fromIntegral
 
 primme_set_max_block_size :: Cprimme_params -> Int -> IO ()
 primme_set_max_block_size p = {#set primme_params.maxBlockSize#} p . fromIntegral

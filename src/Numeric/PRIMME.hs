@@ -49,6 +49,7 @@ module Numeric.PRIMME
     eigh,
 
     -- * Misc
+    getPrimmeVersion,
     isHermitian,
     PrimmeException (..),
     BlasDatatype (blasTag),
@@ -195,6 +196,17 @@ toCprimme_target :: PrimmeTarget -> Cprimme_target
 toCprimme_target PrimmeSmallest = Cprimme_smallest
 toCprimme_target PrimmeLargest = Cprimme_largest
 
+data PrimmeMethod
+  = -- | GD+k
+    PrimmeGDOlsenPlusK
+  | -- | JDQMR
+    PrimmeJDQMRETol
+  deriving (Read, Show, Eq)
+
+toCprimme_method :: PrimmeMethod -> Cprimme_preset_method
+toCprimme_method PrimmeGDOlsenPlusK = Cprimme_GD_Olsen_plusK
+toCprimme_method PrimmeJDQMRETol = Cprimme_JDQMR_ETol
+
 -- | Specify some more information about the eigenvalue problem at hand.
 --
 -- /Warning:/ it is of utmost importance to use the correct dimension! If your
@@ -207,10 +219,15 @@ data PrimmeOptions = PrimmeOptions
     pNumEvals :: Int,
     -- | Which eigenpairs to target
     pTarget :: PrimmeTarget,
+    -- | Which algorithm to use
+    pMethod :: PrimmeMethod,
     -- | Tolerance
     pEps :: Double,
     -- | Maximal basis size. [See also](http://www.cs.wm.edu/~andreas/software/doc/appendix.html#c.primme_params.maxBasisSize)
     pMaxBasisSize :: Int,
+    -- | Maximum number of Ritz vectors kept after restarting the basis.
+    -- [See also](http://www.cs.wm.edu/~andreas/software/doc/appendix.html#c.primme_params.minRestartSize)
+    pMinRestartSize :: Int,
     -- | Maximal block size. [See also](http://www.cs.wm.edu/~andreas/software/doc/appendix.html#c.primme_params.maxBlockSize)
     pMaxBlockSize :: Int
   }
@@ -221,8 +238,10 @@ defaultOptions =
     { pDim = -1,
       pNumEvals = 1,
       pTarget = PrimmeSmallest,
+      pMethod = PrimmeGDOlsenPlusK,
       pEps = 0.0,
       pMaxBasisSize = -1,
+      pMinRestartSize = -1,
       pMaxBlockSize = -1
     }
 
@@ -256,13 +275,19 @@ initOptions options c_options = do
         <> "; basis size must be at least 2"
     liftIO $ primme_set_max_basis_size c_options (pMaxBasisSize options)
   --
+  unless (pMinRestartSize options == -1) $ do
+    when (pMinRestartSize options < 0) . throw . PrimmeException . T.pack $
+      "pMinRestartSize in PrimmeOptions is invalid: " <> show (pMinRestartSize options)
+        <> "; expected a positive integer"
+    liftIO $ primme_set_min_restart_size c_options (pMinRestartSize options)
+  --
   unless (pMaxBlockSize options == -1) $ do
     when (pMaxBlockSize options <= 0) . throw . PrimmeException . T.pack $
       "pMaxBlockSize in PrimmeOptions is invalid: " <> show (pMaxBlockSize options)
         <> "; expected a positive integer"
     liftIO $ primme_set_max_block_size c_options (pMaxBlockSize options)
   --
-  liftIO $ primme_set_method Cprimme_DEFAULT_MIN_MATVECS c_options
+  liftIO $ primme_set_method (toCprimme_method $ pMethod options) c_options
 
 withOptions :: BlasDatatype a => PrimmeOptions -> PrimmeOperator a -> (Cprimme_params -> IO b) -> IO b
 withOptions opts apply func = bracket primme_params_create primme_params_destroy $ \p -> do
