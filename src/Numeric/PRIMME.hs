@@ -58,6 +58,7 @@ module Numeric.PRIMME
   )
 where
 
+import Colog.Core (LogAction (..))
 import Control.Exception.Safe (Exception, MonadThrow, SomeException, bracket, catch, impureThrow, throw)
 import Control.Monad (unless, when)
 import Control.Monad.IO.Class
@@ -74,6 +75,7 @@ import Foreign.ForeignPtr
 import Foreign.Ptr (FunPtr, castPtr, nullPtr)
 import Foreign.Storable
 import Numeric.PRIMME.Internal
+import Numeric.PRIMME.Monitor
 
 -- | Mutable dense matrix in column-major order.
 data MBlock s a = MBlock
@@ -229,7 +231,8 @@ data PrimmeOptions = PrimmeOptions
     -- [See also](http://www.cs.wm.edu/~andreas/software/doc/appendix.html#c.primme_params.minRestartSize)
     pMinRestartSize :: Int,
     -- | Maximal block size. [See also](http://www.cs.wm.edu/~andreas/software/doc/appendix.html#c.primme_params.maxBlockSize)
-    pMaxBlockSize :: Int
+    pMaxBlockSize :: Int,
+    pLogAction :: Maybe PrimmeMonitor
   }
 
 defaultOptions :: PrimmeOptions
@@ -242,7 +245,8 @@ defaultOptions =
       pEps = 0.0,
       pMaxBasisSize = -1,
       pMinRestartSize = -1,
-      pMaxBlockSize = -1
+      pMaxBlockSize = -1,
+      pLogAction = Nothing
     }
 
 initOptions :: (MonadIO m, MonadThrow m) => PrimmeOptions -> Cprimme_params -> m ()
@@ -267,7 +271,7 @@ initOptions options c_options = do
     "pEps in PrimmeOptions is invalid: " <> show (pEps options) <> "; expected a non-negative number"
   liftIO $ primme_set_eps c_options (pEps options)
   --
-  liftIO $ primme_set_print_level c_options 5
+  -- liftIO $ primme_set_print_level c_options 5
   --
   unless (pMaxBasisSize options == -1) $ do
     when (pMaxBasisSize options < 2) . throw . PrimmeException . T.pack $
@@ -289,11 +293,15 @@ initOptions options c_options = do
   --
   liftIO $ primme_set_method (toCprimme_method $ pMethod options) c_options
 
-withOptions :: BlasDatatype a => PrimmeOptions -> PrimmeOperator a -> (Cprimme_params -> IO b) -> IO b
+withOptions :: forall a b. BlasDatatype a => PrimmeOptions -> PrimmeOperator a -> (Cprimme_params -> IO b) -> IO b
 withOptions opts apply func = bracket primme_params_create primme_params_destroy $ \p -> do
   initOptions opts p
-  withOperator apply $ \matvecPtr ->
-    primme_set_matvec p matvecPtr >> func p
+  withOperator apply $ \matvecPtr -> do
+    primme_set_matvec p matvecPtr
+    case pLogAction opts of
+      Just action -> withCmonitorFun (Proxy @a) action $ \monitorPtr ->
+        primme_set_monitor p monitorPtr >> func p
+      Nothing -> func p
 
 withOperator :: BlasDatatype a => PrimmeOperator a -> (FunPtr CmatrixMatvec -> IO b) -> IO b
 withOperator !f = withCmatrixMatvec cWrapper

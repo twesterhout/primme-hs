@@ -7,9 +7,11 @@ module Numeric.PRIMME.Internal
     BlasDatatypeTag (..),
     Cprimme_params,
     Cprimme_target (..),
+    Cprimme_event (..),
     Cprimme_preset_method (..),
     CmatrixMatvec,
     withCmatrixMatvec,
+    CmonitorFun,
     primme_get_dim,
     primme_set_dim,
     primme_set_num_evals,
@@ -20,6 +22,7 @@ module Numeric.PRIMME.Internal
     primme_set_max_block_size,
     primme_set_method,
     primme_set_matvec,
+    primme_set_monitor,
     primme_set_print_level,
     primme_params_create,
     primme_params_destroy,
@@ -102,6 +105,15 @@ type PrimmeInt = {#type wrap_primme_int#}
 {#enum primme_target as Cprimme_target {} add prefix = "C" #}
 {#enum primme_projection as Cprimme_projection {} add prefix = "C" #}
 {#enum primme_op_datatype as Cprimme_op_datatype {} add prefix = "C" #}
+
+{#enum primme_event as Cprimme_event {} add prefix = "C" deriving (Eq, Show) #}
+
+instance Storable Cprimme_event where
+  sizeOf _ = {#sizeof primme_event#}
+  alignment _ = {#alignof primme_event#}
+  peek p = peek (castPtr p :: Ptr CInt) >>= pure . toEnum . fromIntegral
+  poke p = poke (castPtr p :: Ptr CInt) . fromIntegral . fromEnum
+
 {#enum primme_preset_method as Cprimme_preset_method {}
   with prefix = "PRIMME_" add prefix = "Cprimme_" #}
 
@@ -160,6 +172,35 @@ withCmatrixMatvec f = bracket (mkCmatrixMatvec f) freeHaskellFunPtr
 primme_set_matvec :: Cprimme_params -> FunPtr CmatrixMatvec -> IO ()
 primme_set_matvec = {#set primme_params.matrixMatvec#}
 
+-- void (*monitorFun)(void *basisEvals, int *basisSize, int *basisFlags, int *iblock,
+--                    int *blockSize, void *basisNorms, int *numConverged, void *lockedEvals,
+--                    int *numLocked, int *lockedFlags, void *lockedNorms, int *inner_its,
+--                    void *LSRes, const char *msg, double *time, primme_event *event,
+--                    struct primme_params *primme, int *ierr)
+type CmonitorFun r =
+  Ptr () ->
+  Ptr CInt ->
+  Ptr CInt ->
+  Ptr CInt ->
+  Ptr CInt ->
+  Ptr () ->
+  Ptr CInt ->
+  Ptr () ->
+  Ptr CInt ->
+  Ptr CInt ->
+  Ptr () ->
+  Ptr CInt ->
+  Ptr () ->
+  Ptr CChar ->
+  Ptr CDouble ->
+  Ptr CInt -> -- primme_event ->
+  Cprimme_params ->
+  Ptr CInt ->
+  IO r
+
+primme_set_monitor :: Cprimme_params -> FunPtr (CmonitorFun ()) -> IO ()
+primme_set_monitor = {#set primme_params.monitorFun#}
+
 {#fun sprimme { castPtr' `Ptr Float', castPtr' `Ptr Float', castPtr' `Ptr Float', `Cprimme_params' } -> `CInt' id #}
 {#fun dprimme { castPtr' `Ptr Double', castPtr' `Ptr Double', castPtr' `Ptr Double', `Cprimme_params' } -> `CInt' id #}
 -- C2HS refuses to handle C99 complex types properly
@@ -171,26 +212,7 @@ foreign import ccall "zprimme"
 
 
 
-data PrimmeInfo = PrimmeInfo
-  { primmeEvals :: Vector Double,
-    primmeNorms :: Vector Double,
-    primmeTime :: Double
-  }
-  deriving (Read, Show)
 
--- void (*monitorFun)(void *basisEvals, int *basisSize, int *basisFlags, int *iblock,
---                    int *blockSize, void *basisNorms, int *numConverged, void *lockedEvals,
---                    int *numLocked, int *lockedFlags, void *lockedNorms, int *inner_its,
---                    void *LSRes, const char *msg, double *time, primme_event *event,
---                    struct primme_params *primme, int *ierr)
-type CmonitorFun = Ptr () -> Ptr CInt -> Ptr CInt -> Ptr CInt
-                -> Ptr CInt -> Ptr () -> Ptr CInt -> Ptr ()
-                -> Ptr CInt -> Ptr CInt -> Ptr () -> Ptr CInt
-                -> Ptr () -> Ptr CChar -> Ptr Double -> Ptr ()
-                -> Cprimme_params -> Ptr CInt -> IO ()
-
--- foreign import ccall "wrapper"
---   mkCmonitorFun
 
 
 
@@ -208,7 +230,7 @@ type family BlasRealPart a where
   BlasRealPart (Complex Double) = Double
 
 -- | BLAS datatype.
-class ( Storable a, Storable (BlasRealPart a), Floating a, Floating (BlasRealPart a)) => BlasDatatype a where
+class (Storable a, Storable (BlasRealPart a), Floating a, Floating (BlasRealPart a), Show a, Show (BlasRealPart a)) => BlasDatatype a where
   -- type BlasRealPart a :: Type
   blasTag :: proxy a -> BlasDatatypeTag a
 
@@ -234,7 +256,7 @@ castPtr' :: Coercible a b => Ptr a -> Ptr b
 castPtr' = castPtr
 
 
-cPrimme :: forall a. (BlasDatatype a, Storable (BlasRealPart a))
+cPrimme :: forall a. (BlasDatatype a)
   => Ptr (BlasRealPart a) -> Ptr a -> Ptr (BlasRealPart a) -> Cprimme_params -> IO CInt
 cPrimme = case blasTag (Proxy :: Proxy a) of
   FloatTag -> sprimme
