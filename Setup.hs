@@ -1,4 +1,4 @@
-import Control.Monad (unless)
+import Control.Monad (forM_, unless)
 import Data.Char (toLower)
 import Data.Maybe (fromMaybe)
 import Distribution.PackageDescription
@@ -17,7 +17,7 @@ import Distribution.Simple.Utils
   )
 import Distribution.System
 import qualified Distribution.Verbosity as Verbosity
-import System.Directory (getCurrentDirectory)
+import System.Directory (getCurrentDirectory, listDirectory)
 
 main = defaultMainWithHooks hooks
   where
@@ -35,10 +35,12 @@ buildLibPrimme :: Args -> ConfigFlags -> IO HookedBuildInfo
 buildLibPrimme _ flags = do
   let verbosity = fromFlag $ configVerbosity flags
       useSystem = getCabalFlag "use_system_libprimme" flags
+      useShared = getCabalFlag "use_shared_libs" flags
+      extraArgs = "--verbose" : (if useShared then ["--shared"] else [])
   dir <- getCurrentDirectory
   unless useSystem $ do
-    notice verbosity "Building libprimme.a C library..."
-    rawSystemExit verbosity "bash" ["build_primme.sh", "--verbose"]
+    notice verbosity "Building PRIMME C library..."
+    rawSystemExit verbosity "bash" $ "build_primme.sh" : extraArgs
   return emptyHookedBuildInfo
 
 -- updateLocalDirs :: Args -> BuildFlags -> IO HookedBuildInfo
@@ -83,14 +85,23 @@ updateExtraDirs localBuildInfo = do
     libBuild = libBuildInfo lib
 
 copyLib :: ConfigFlags -> LocalBuildInfo -> FilePath -> IO ()
-copyLib flags _ libPref =
+copyLib flags localBuildInfo libPref =
   unless useSystem $ do
-    notice verbosity $ "Installing libprimme.a C library..."
-    installMaybeExecutableFile verbosity ("third_party/primme/lib" <> libName) (libPref <> libName)
+    notice verbosity $ "Installing PRIMME C library..."
+    libDir <- (<> "/third_party/primme/lib") <$> getCurrentDirectory
+    libraries <- listDirectory libDir
+    forM_ libraries $ \f -> do
+      installMaybeExecutableFile verbosity (libDir <> "/" <> f) (libPref <> "/" <> f)
   where
     verbosity = fromFlag $ configVerbosity flags
     useSystem = getCabalFlag "use_system_libprimme" flags
-    libName = "/libprimme.a"
+    useShared = getCabalFlag "use_shared_libs" flags
+    Platform _ os = hostPlatform localBuildInfo
+    extension = case os of
+      Windows -> if useShared then "dll" else "a"
+      OSX -> if useShared then "dylib" else "a"
+      _ -> if useShared then "so" else "a"
+    libName = "/libprimme." <> extension
 
 copyLibPrimme :: Args -> CopyFlags -> PackageDescription -> LocalBuildInfo -> IO ()
 copyLibPrimme _ flags packageDescription localBuildInfo = copyLib config localBuildInfo libPref

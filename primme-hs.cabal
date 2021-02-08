@@ -18,6 +18,10 @@ extra-source-files:    build_primme.sh
                        cbits/wrapper.h
                        cbits/primme.h.patch
 
+flag use_shared_libs
+  description:         Use shared libprimme (useful for development since GHCi does not support loading static libraries).
+  default:             False
+
 flag use_system_libprimme
   description:         Use libprimme that is installed on the system.
   default:             False
@@ -44,18 +48,16 @@ common common-options
                      , vector
                      , text
                      , safe-exceptions
+                     , co-log-core
 
   ghc-options:         -Wall
                        -Wcompat
                        -Widentities
                        -Wincomplete-uni-patterns
                        -Wincomplete-record-updates
-  if impl(ghc >= 8.0)
-    ghc-options:       -Wredundant-constraints
-  if impl(ghc >= 8.2)
-    ghc-options:       -fhide-source-paths
-  if impl(ghc >= 8.4)
-    ghc-options:       -Wmissing-export-lists
+                       -Wredundant-constraints
+                       -fhide-source-paths
+                       -Wmissing-export-lists
                        -Wpartial-fields
   if impl(ghc >= 8.8)
     ghc-options:       -Wmissing-deriving-strategies
@@ -67,8 +69,10 @@ common common-options
                        FlexibleContexts
                        FlexibleInstances
                        TypeFamilies
+                       TypeApplications
                        ScopedTypeVariables
                        OverloadedStrings
+                       RankNTypes
                        GADTs
 
 
@@ -78,6 +82,7 @@ library
   hs-source-dirs:      src
   c-sources:           cbits/wrapper.c
   exposed-modules:     Numeric.PRIMME
+                     , Numeric.PRIMME.Monitor
                      , Numeric.PRIMME.Internal
   extra-libraries:     primme
   include-dirs:        cbits

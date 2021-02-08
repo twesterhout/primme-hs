@@ -1,0 +1,4 @@
+packages: *
+
+package primme-hs
+  flags: +use_shared_libs
