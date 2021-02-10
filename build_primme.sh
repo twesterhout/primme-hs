@@ -11,6 +11,7 @@ PROJECT_DIR="$(
   cd "${SCRIPT_DIR}"
   pwd -P
 )"
+BLAS=blas
 SHARED=0
 TEST=0
 VERBOSE=0
@@ -20,6 +21,10 @@ while [[ $# -gt 0 ]]; do
   case $key in
   --shared)
     SHARED=1
+    shift
+    ;;
+  --blas=*)
+    BLAS=${key#*=}
     shift
     ;;
   --test)
@@ -68,10 +73,38 @@ if [[ "$OSTYPE" == "darwin"* ]]; then
   patch -u include/primme.h "${PROJECT_DIR}/cbits/primme.h.patch"
 fi
 
+find_blas() {
+  if [ $SHARED -eq 0 ]; then
+    args="--static"
+  else
+    args=""
+  fi
+  [[ $BLAS == "accelerate" && "$OSTYPE" != "darwin"* ]] && BLAS=blas
+  case "$BLAS" in
+  accelerate)
+    export LDFLAGS="$LDFLAGS -framework Accelerate"
+    ;;
+  blas)
+    export CFLAGS="$CFLAGS $(pkg-config --cflags lapack --cflags blas)"
+    export LDFLAGS="$LDFLAGS $(pkg-config $args --libs lapack --libs blas)"
+    ;;
+  openblas)
+    export CFLAGS="$CFLAGS $(pkg-config --cflags openblas)"
+    export LDFLAGS="$LDFLAGS $(pkg-config $args --libs openblas)"
+    ;;
+  *)
+    echo "Invalid blas: $BLAS"
+    echo "Supported values are 'accelerate', 'openblas', 'blas'"
+    exit 1
+    ;;
+  esac
+}
+
 if [ $BUILD -eq 1 ]; then
   export CFLAGS="-O3 -march=nocona -mtune=haswell -fPIC -DNDEBUG -DPRIMME_BLASINT_SIZE=32 -DPRIMME_INT_SIZE=64"
   export FFLAGS="-fno-second-underscore -O3 -march=nocona -mtune=haswell"
   export PRIMME_WITH_HALF=no PRIMME_WITH_FLOAT=yes
+  find_blas
   run_make -j$NPROC lib
   [ $TEST -eq 1 ] && run_make test
   run_make install

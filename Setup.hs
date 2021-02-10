@@ -36,7 +36,16 @@ buildLibPrimme _ flags = do
   let verbosity = fromFlag $ configVerbosity flags
       useSystem = getCabalFlag "use_system_libprimme" flags
       useShared = getCabalFlag "use_shared_libs" flags
-      extraArgs = "--verbose" : (if useShared then ["--shared"] else [])
+      useAccelerate = getCabalFlag "use_accelerate" flags
+      useOpenBLAS = getCabalFlag "use_openblas" flags
+      blas =
+        if useAccelerate
+          then "accelerate"
+          else
+            if useOpenBLAS
+              then "openblas"
+              else "blas"
+      extraArgs = ["--verbose", "--blas=" <> blas] <> (if useShared then ["--shared"] else [])
   dir <- getCurrentDirectory
   unless useSystem $ do
     notice verbosity "Building PRIMME C library..."
