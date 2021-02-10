@@ -71,8 +71,6 @@ fi
 if [ $BUILD -eq 1 ]; then
   export CFLAGS="-O3 -march=nocona -mtune=haswell -fPIC -DNDEBUG -DPRIMME_BLASINT_SIZE=32 -DPRIMME_INT_SIZE=64"
   export FFLAGS="-fno-second-underscore -O3 -march=nocona -mtune=haswell"
-  export LIBS="$LDFLAGS -lopenblas"
-  export LDFLAGS="$LIBS"
   export PRIMME_WITH_HALF=no PRIMME_WITH_FLOAT=yes
   run_make -j$NPROC lib
   [ $TEST -eq 1 ] && run_make test
@@ -86,7 +84,6 @@ if [ $BUILD -eq 1 ]; then
     fi
   fi
   [ $VERBOSE -eq 1 ] && ls -l "${PREFIX}/lib"
-  ldd "${PREFIX}/lib/libprimme.so"
 else
   run_make clean
 fi
