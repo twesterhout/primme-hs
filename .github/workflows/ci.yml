@@ -16,6 +16,9 @@ jobs:
           - os: ubuntu-latest
             cabal: "3.0.0.0"
             ghc: "8.8.4"
+          - os: ubuntu-16.04
+            cabal: "3.0.0.0"
+            ghc: "8.8.4"
           - os: macos-latest
             cabal: "3.0.0.0"
             ghc: "8.8.4"
@@ -51,6 +54,6 @@ jobs:
       run: |
         cabal v2-build --enable-tests --enable-benchmarks
 
-        # - name: Test
-        #   run: |
-        #     cabal v2-test --enable-tests --test-show-details=direct
+    - name: Test
+      run: |
+        cabal v2-test --enable-tests --test-show-details=direct
