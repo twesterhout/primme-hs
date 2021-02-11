@@ -56,4 +56,5 @@ jobs:
 
     - name: Test
       run: |
+        export LD_LIBRARY_PATH=$PWD/third_party/primme/lib:$LD_LIBRARY_PATH
         cabal v2-test --enable-tests --test-show-details=direct
