@@ -19,17 +19,19 @@ import Distribution.System
 import qualified Distribution.Verbosity as Verbosity
 import System.Directory (getCurrentDirectory, listDirectory)
 
-main = defaultMainWithHooks hooks
-  where
-    hooks =
-      simpleUserHooks
-        { preConf = buildLibPrimme,
-          confHook = \a f -> confHook simpleUserHooks a f >>= updateExtraDirs,
-          postConf = \_ _ _ _ -> return (),
-          preBuild = updateLocalDirs,
-          postCopy = copyLibPrimme,
-          postClean = cleanLibPrimme
-        }
+main = defaultMainWithHooks autoconfUserHooks
+
+-- main = defaultMainWithHooks hooks
+--   where
+--     hooks =
+--       simpleUserHooks
+--         { preConf = buildLibPrimme,
+--           confHook = \a f -> confHook simpleUserHooks a f >>= updateExtraDirs,
+--           postConf = \_ _ _ _ -> return (),
+--           preBuild = updateLocalDirs,
+--           postCopy = copyLibPrimme,
+--           postClean = cleanLibPrimme
+--         }
 
 buildLibPrimme :: Args -> ConfigFlags -> IO HookedBuildInfo
 buildLibPrimme _ flags = do

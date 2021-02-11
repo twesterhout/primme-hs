@@ -1,0 +1,150 @@
+#!/usr/bin/env bash
+
+# A hach to restart the script with Bash
+if [ -z "$BASH" ]; then exec bash "$0" "$@"; fi
+
+set -eu
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" >/dev/null 2>&1 && pwd -L | sed 's://:/:g')"
+PRIMME_VERSION=3.1.1
+WORKDIR="${SCRIPT_DIR}/third_party/build"
+
+get_num_procs() {
+  if [[ "$OSTYPE" == "darwin"* ]]; then
+    sysctl -n hw.logicalcpu
+  else
+    nproc
+  fi
+}
+
+download_and_patch() {
+  mkdir -vp "$WORKDIR"
+  pushd "$WORKDIR"
+  if [[ ! -f "v${PRIMME_VERSION}.tar.gz" ]]; then
+    echo "Downloading primme-${PRIMME_VERSION} ..."
+    wget --no-verbose "https://github.com/primme/primme/archive/v${PRIMME_VERSION}.tar.gz"
+  fi
+  tar xf "v${PRIMME_VERSION}.tar.gz"
+  pushd "primme-${PRIMME_VERSION}"
+  if [[ "$OSTYPE" == "darwin"* ]]; then
+    echo "Pathing primme.h..."
+    patch -u include/primme.h "${SCRIPT_DIR}/cbits/primme.h.patch"
+  elif [[ "$OSTYPE" == "linux-musl"* ]]; then
+    echo "Pathing common.h..."
+    patch -u src/include/common.h "${SCRIPT_DIR}/cbits/common.h.patch"
+  fi
+  popd
+  popd
+}
+
+get_blas_libraries() {
+  pkg-config --static --libs-only-l lapack blas | tr ' ' '\n' | sed 's/^-l/    /'
+}
+
+get_blas_lib_dirs() {
+  pkg-config --static --libs-only-L lapack blas | tr ' ' '\n' | sed 's/^-L/    /'
+}
+
+build_static_lib() {
+  export CFLAGS="-O3 -march=nocona -mtune=haswell -fPIC -DNDEBUG -DPRIMME_BLASINT_SIZE=32 -DPRIMME_INT_SIZE=64"
+  [[ "$OSTYPE" != "darwin"* ]] && export CFLAGS="$CFLAGS $(pkg-config --cflags lapack blas)"
+  export FFLAGS="-fno-second-underscore -O3 -march=nocona -mtune=haswell"
+  export LDFLAGS=
+  export PRIMME_WITH_HALF=no PRIMME_WITH_FLOAT=yes
+  export PREFIX="${SCRIPT_DIR}/third_party/primme"
+  echo "Using CFLAGS: $CFLAGS"
+  echo "Using FFLAGS: $FFLAGS"
+  echo "Using LDFLAGS: $LDFLAGS"
+  pushd "${WORKDIR}/primme-${PRIMME_VERSION}"
+  make -j$(get_num_procs) lib
+  make install
+  if [[ "$OSTYPE" == "darwin"* ]]; then
+    rm -v "${PREFIX}"/lib/libprimme*.dylib
+  else
+    rm -v "${PREFIX}"/lib/libprimme.so*
+  fi
+  cp -v "lib/libprimme.a" "${PREFIX}/lib"
+  popd
+}
+
+generate_buildinfo_osx() {
+  cat <<-EOF
+extra-libraries:
+    ${PREFIX}/lib/libprimme.a
+include-dirs:
+    ${PREFIX}/include
+frameworks:
+    Accelerate
+EOF
+}
+
+generate_buildinfo_linux() {
+  cat <<-EOF
+include-dirs:
+    ${PREFIX}/include
+extra-libraries:
+    ${PREFIX}/lib/libprimme.a
+$(get_blas_libraries)
+extra-lib-dirs:
+$(get_blas_lib_dirs)
+EOF
+}
+
+generate_buildinfo() {
+  if [[ "$OSTYPE" == "darwin"* ]]; then
+    generate_buildinfo_osx
+  else
+    generate_buildinfo_linux
+  fi
+}
+
+print_help() {
+  echo ""
+  echo "Usage: ./configure [--help] [--clean]"
+  echo ""
+  echo "This script builds PRIMME C library and generates primme-hs.buildinfo"
+  echo "file for Cabal."
+  echo ""
+  echo "Options:"
+  echo "  --help         Display this message."
+  echo "  --clean        Run make clean."
+  echo ""
+}
+
+main() {
+  CLEAN=0
+  while [ $# -gt 0 ]; do
+    key="$1"
+    case $key in
+    --clean)
+      CLEAN=1
+      shift
+      ;;
+    --help)
+      print_help
+      exit 0
+      ;;
+    CC=*)
+      eval "export $1"
+      shift
+      ;;
+    *)
+      echo "Warning: argument '$1' ignored"
+      shift
+      ;;
+    esac
+  done
+  if [ $CLEAN -eq 0 ]; then
+    echo "Running ./configure on $OSTYPE..."
+    download_and_patch
+    build_static_lib
+    generate_buildinfo >"primme-hs.buildinfo"
+  else
+    if [ -d "${WORKDIR}/primme-${PRIMME_VERSION}" ]; then
+      cd "${WORKDIR}/primme-${PRIMME_VERSION}"
+      make clean
+    fi
+  fi
+}
+
+main "$@"

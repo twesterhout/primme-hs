@@ -10,7 +10,7 @@ license-file:          LICENSE
 author:                Tom Westerhout
 maintainer:            Tom Westerhout <14264576+twesterhout@users.noreply.github.com>
 copyright:             2020 Tom Westerhout
-build-type:            Custom
+build-type:            Configure
 extra-doc-files:       README.md
                        CHANGELOG.md
 tested-with:           GHC == 8.8.4
@@ -85,21 +85,21 @@ library
   exposed-modules:     Numeric.PRIMME
                      , Numeric.PRIMME.Monitor
                      , Numeric.PRIMME.Internal
-  extra-libraries:     primme
+  -- extra-libraries:     primme
   include-dirs:        cbits
 
-  if (os(darwin) || os(osx)) && flag(use_accelerate)
-      frameworks:      Accelerate
-  else
-    if flag(use_openblas)
-      extra-libraries: openblas
-                       gfortran
-                       gomp
-                       m
-                       pthread
-    else
-      extra-libraries: lapack
-                       blas
+  -- if (os(darwin) || os(osx)) && flag(use_accelerate)
+  --     frameworks:      Accelerate
+  -- else
+  --   if flag(use_openblas)
+  --     extra-libraries: openblas
+  --                      gfortran
+  --                      gomp
+  --                      m
+  --                      pthread
+  --   else
+  --     extra-libraries: lapack
+  --                      blas
 
 
 executable example1
