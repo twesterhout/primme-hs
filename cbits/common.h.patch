@@ -1,0 +1,11 @@
+@@ -166,10 +166,6 @@
+ 
+ #define PRIMME_OP_HREAL PRIMME_OP_HSCALAR
+ 
+-/* complex.h may be defined in primme.h or here; so undefine I */
+-#ifdef I
+-#   undef I
+-#endif
+ 
+ #ifndef __cplusplus
+ /* pgcc does not provide tgmath.h and the system's one may not support PGI */

@@ -17,6 +17,7 @@ tested-with:           GHC == 8.8.4
 extra-source-files:    build_primme.sh
                        cbits/wrapper.h
                        cbits/primme.h.patch
+                       cbits/common.h.patch
 
 flag use_shared_libs
   description:         Use shared libprimme (useful for development since GHCi does not support loading static libraries).

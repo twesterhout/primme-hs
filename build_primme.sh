@@ -71,6 +71,8 @@ tar xf "v${PRIMME_VERSION}.tar.gz"
 cd "primme-${PRIMME_VERSION}"
 if [[ "$OSTYPE" == "darwin"* ]]; then
   patch -u include/primme.h "${PROJECT_DIR}/cbits/primme.h.patch"
+elif [[ "$OSTYPE" == "linux-musl"* ]]; then
+  patch -u src/include/common.h "${PROJECT_DIR}/cbits/common.h.patch"
 fi
 
 find_blas() {
