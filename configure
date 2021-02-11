@@ -70,7 +70,7 @@ build_static_lib() {
 generate_buildinfo_osx() {
   cat <<-EOF
 extra-libraries:
-    ${PREFIX}/lib/libprimme.a
+    primme
 include-dirs:
     ${PREFIX}/include
 frameworks:
