@@ -107,6 +107,10 @@ if [ $BUILD -eq 1 ]; then
   export FFLAGS="-fno-second-underscore -O3 -march=nocona -mtune=haswell"
   export PRIMME_WITH_HALF=no PRIMME_WITH_FLOAT=yes
   find_blas
+  export LIBS="$LDFLAGS"
+  echo "Using CFLAGS: $CFLAGS"
+  echo "Using FFLAGS: $FFLAGS"
+  echo "Using LDFLAGS: $LDFLAGS"
   run_make -j$NPROC lib
   [ $TEST -eq 1 ] && run_make test
   run_make install
