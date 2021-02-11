@@ -11,7 +11,8 @@ PROJECT_DIR="$(
   cd "${SCRIPT_DIR}"
   pwd -P
 )"
-BLAS=blas
+USE_OPENBLAS=0
+USE_ACCELERATE=0
 SHARED=0
 TEST=0
 VERBOSE=0
@@ -23,8 +24,12 @@ while [[ $# -gt 0 ]]; do
     SHARED=1
     shift
     ;;
-  --blas=*)
-    BLAS=${key#*=}
+  --use-accelerate)
+    [[ "$OSTYPE" == "darwin"* ]] && USE_ACCELERATE=1
+    shift
+    ;;
+  --use-openblas)
+    [[ "$OSTYPE" != "darwin"* ]] && USE_OPENBLAS=1
     shift
     ;;
   --test)
@@ -47,15 +52,16 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
-run_make() {
-  make $([ $VERBOSE -ne 1 ] && echo "-s") "$@"
-}
+run_make() { make $([[ $VERBOSE -ne 1 ]] && echo "-s") "$@"; }
+run_cp() { cp $([[ $VERBOSE -eq 1 ]] && echo "-v") "$@"; }
+run_rm() { rm $([[ $VERBOSE -eq 1 ]] && echo "-v") "$@"; }
+run_echo() { [[ $VERBOSE -eq 1 ]] && echo "$@"; }
 
 PRIMME_VERSION=3.1.1
 export PREFIX="$PWD/third_party/primme"
 WORKDIR="$PWD/third_party/build"
 
-[ $VERBOSE -eq 1 ] && echo "Running on $OSTYPE..."
+run_echo "Running on $OSTYPE..."
 if [[ "$OSTYPE" == "darwin"* ]]; then
   NPROC=$(sysctl -n hw.logicalcpu)
 else
@@ -64,7 +70,7 @@ fi
 
 mkdir -p "$WORKDIR" && cd "$WORKDIR"
 if [ ! -f "v${PRIMME_VERSION}.tar.gz" ]; then
-  [ $VERBOSE -eq 1 ] && echo "Downloading primme-${PRIMME_VERSION} ..."
+  run_echo "Downloading primme-${PRIMME_VERSION} ..."
   wget --no-verbose "https://github.com/primme/primme/archive/v${PRIMME_VERSION}.tar.gz"
 fi
 tar xf "v${PRIMME_VERSION}.tar.gz"
@@ -76,53 +82,38 @@ elif [[ "$OSTYPE" == "linux-musl"* ]]; then
 fi
 
 find_blas() {
-  if [ $SHARED -eq 0 ]; then
-    args="--static"
-  else
-    args=""
-  fi
-  [[ $BLAS == "accelerate" && "$OSTYPE" != "darwin"* ]] && BLAS=blas
-  case "$BLAS" in
-  accelerate)
+  if [[ $USE_ACCELERATE -eq 1 ]]; then
     export LDFLAGS="$LDFLAGS -framework Accelerate"
-    ;;
-  blas)
-    export CFLAGS="$CFLAGS $(pkg-config --cflags lapack --cflags blas)"
-    export LDFLAGS="$LDFLAGS $(pkg-config $args --libs lapack --libs blas)"
-    ;;
-  openblas)
+  elif [[ $USE_OPENBLAS -eq 1 ]]; then
     export CFLAGS="$CFLAGS $(pkg-config --cflags openblas)"
-    export LDFLAGS="$LDFLAGS $(pkg-config $args --libs openblas)"
-    ;;
-  *)
-    echo "Invalid blas: $BLAS"
-    echo "Supported values are 'accelerate', 'openblas', 'blas'"
-    exit 1
-    ;;
-  esac
+    export LDFLAGS="$LDFLAGS $(pkg-config --libs openblas)"
+  else
+    export CFLAGS="$CFLAGS $(pkg-config --cflags lapack --cflags blas)"
+    export LDFLAGS="$LDFLAGS $(pkg-config --libs lapack --libs blas)"
+  fi
 }
 
-if [ $BUILD -eq 1 ]; then
+if [[ $BUILD -eq 1 ]]; then
   export CFLAGS="-O3 -march=nocona -mtune=haswell -fPIC -DNDEBUG -DPRIMME_BLASINT_SIZE=32 -DPRIMME_INT_SIZE=64"
   export FFLAGS="-fno-second-underscore -O3 -march=nocona -mtune=haswell"
   export PRIMME_WITH_HALF=no PRIMME_WITH_FLOAT=yes
   find_blas
   export LIBS="$LDFLAGS"
-  echo "Using CFLAGS: $CFLAGS"
-  echo "Using FFLAGS: $FFLAGS"
-  echo "Using LDFLAGS: $LDFLAGS"
+  run_echo "Using CFLAGS: $CFLAGS"
+  run_echo "Using FFLAGS: $FFLAGS"
+  run_echo "Using LDFLAGS: $LDFLAGS"
   run_make -j$NPROC lib
-  [ $TEST -eq 1 ] && run_make test
+  [[ $TEST -eq 1 ]] && run_make test
   run_make install
-  if [[ $SHARED -eq 0 ]]; then # We want the static lib only
-    cp $([ $VERBOSE -eq 1 ] && echo "-v") "lib/libprimme.a" "${PREFIX}/lib"
-    if [[ "$OSTYPE" == "darwin"* ]]; then
-      rm $([ $VERBOSE -eq 1 ] && echo "-v") "${PREFIX}"/lib/libprimme*.dylib
-    else
-      rm $([ $VERBOSE -eq 1 ] && echo "-v") "${PREFIX}"/lib/libprimme.so*
-    fi
-  fi
-  [ $VERBOSE -eq 1 ] && ls -l "${PREFIX}/lib"
+  run_cp "lib/libprimme.a" "${PREFIX}/lib"
+  # if [[ $SHARED -eq 0 ]]; then # We want the static lib only
+  #   run_cp "lib/libprimme.a" "${PREFIX}/lib"
+  #   if [[ "$OSTYPE" == "darwin"* ]]; then
+  #     run_rm "${PREFIX}"/lib/libprimme*.dylib
+  #   else
+  #     run_rm "${PREFIX}"/lib/libprimme.so*
+  #   fi
+  # fi
 else
   run_make clean
 fi

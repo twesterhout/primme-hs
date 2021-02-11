@@ -38,14 +38,10 @@ buildLibPrimme _ flags = do
       useShared = getCabalFlag "use_shared_libs" flags
       useAccelerate = getCabalFlag "use_accelerate" flags
       useOpenBLAS = getCabalFlag "use_openblas" flags
-      blas =
-        if useAccelerate
-          then "accelerate"
-          else
-            if useOpenBLAS
-              then "openblas"
-              else "blas"
-      extraArgs = ["--verbose", "--blas=" <> blas] <> (if useShared then ["--shared"] else [])
+      extraArgs =
+        ["--verbose"] <> (if useShared then ["--shared"] else [])
+          <> (if useOpenBLAS then ["--use-openblas"] else [])
+          <> (if useAccelerate then ["--use-accelerate"] else [])
   dir <- getCurrentDirectory
   unless useSystem $ do
     notice verbosity "Building PRIMME C library..."

@@ -92,11 +92,7 @@ library
       frameworks:      Accelerate
   else
     if flag(use_openblas)
-      extra-libraries: openblas
-                       gfortran
-                       gomp
-                       m
-                       pthread
+      pkgconfig-depends: openblas
     else
       extra-libraries: lapack
                        blas
