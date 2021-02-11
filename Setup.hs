@@ -25,8 +25,8 @@ main = defaultMainWithHooks hooks
       simpleUserHooks
         { preConf = buildLibPrimme,
           confHook = \a f -> confHook simpleUserHooks a f >>= updateExtraDirs,
-          -- postConf = \_ _ _ _ -> return (),
-          -- preBuild = updateLocalDirs,
+          postConf = \_ _ _ _ -> return (),
+          preBuild = updateLocalDirs,
           postCopy = copyLibPrimme,
           postClean = cleanLibPrimme
         }
@@ -48,15 +48,15 @@ buildLibPrimme _ flags = do
     rawSystemExit verbosity "bash" $ "build_primme.sh" : extraArgs
   return emptyHookedBuildInfo
 
--- updateLocalDirs :: Args -> BuildFlags -> IO HookedBuildInfo
--- updateLocalDirs _ flags = do
---   dir <- getCurrentDirectory
---   let buildInfo =
---         emptyBuildInfo
---           { extraLibDirs = [dir <> "/third_party/primme/lib"],
---             includeDirs = [dir <> "/third_party/primme/include"]
---           }
---   return (Just buildInfo, [])
+updateLocalDirs :: Args -> BuildFlags -> IO HookedBuildInfo
+updateLocalDirs _ flags = do
+  dir <- getCurrentDirectory
+  let buildInfo =
+        emptyBuildInfo
+          { extraLibDirs = [dir <> "/third_party/primme/lib"],
+            includeDirs = [dir <> "/third_party/primme/include"]
+          }
+  return (Just buildInfo, [])
 
 -- updateFinalDirs :: LocalBuildInfo -> IO LocalBuildInfo
 -- updateFinalDirs localBuildInfo =
@@ -77,8 +77,7 @@ updateExtraDirs localBuildInfo = do
         lib
           { libBuildInfo =
               libBuild
-                { extraLibDirs = (dir <> "/third_party/primme/lib") : extraLibDirs libBuild,
-                  includeDirs = (dir <> "/third_party/primme/include") : includeDirs libBuild
+                { extraLibDirs = libPref : extraLibDirs libBuild
                 }
           }
   return localBuildInfo {localPkgDescr = packageDescription {library = Just $ lib'}}
@@ -88,6 +87,7 @@ updateExtraDirs localBuildInfo = do
       Just x -> x
       Nothing -> error "this should not have happened; did you remove the library target?"
     libBuild = libBuildInfo lib
+    libPref = libdir $ absoluteInstallDirs packageDescription localBuildInfo NoCopyDest
 
 copyLib :: ConfigFlags -> LocalBuildInfo -> FilePath -> IO ()
 copyLib flags localBuildInfo libPref =
