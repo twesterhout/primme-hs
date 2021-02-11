@@ -37,7 +37,7 @@ jobs:
       name: Cache ~/.cabal/store
       with:
         path: ~/.cabal/store
-        key: ${{ runner.os }}-${{ matrix.ghc }}-cabal
+        key: ${{ matrix.os }}-${{ matrix.ghc }}-cabal
 
     - name: Install OpenBLAS
       if: runner.os == 'Linux'
