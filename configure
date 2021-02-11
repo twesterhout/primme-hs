@@ -50,7 +50,7 @@ build_static_lib() {
   [[ "$OSTYPE" != "darwin"* ]] && export CFLAGS="$CFLAGS $(pkg-config --cflags lapack blas)"
   export FFLAGS="-fno-second-underscore -O3 -march=nocona -mtune=haswell"
   if [[ "$OSTYPE" == "darwin"* ]]; then
-    export LDFLAGS="$LDFLAGS -framework Accelerate"
+    export LDFLAGS="-framework Accelerate"
   else
     export LDFLAGS=
   fi
