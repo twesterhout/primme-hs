@@ -50,7 +50,7 @@ build_static_lib() {
   [[ "$OSTYPE" != "darwin"* ]] && export CFLAGS="$CFLAGS $(pkg-config --cflags lapack blas)"
   export FFLAGS="-fno-second-underscore -O3 -march=nocona -mtune=haswell"
   if [[ "$OSTYPE" == "darwin"* ]]; then
-    export LDFLAGS="-framework Accelerate"
+    export LDFLAGS="$LDFLAGS -framework Accelerate"
   else
     export LDFLAGS=
   fi
@@ -75,6 +75,8 @@ generate_buildinfo_osx() {
   cat <<-EOF
 extra-libraries:
     primme
+extra-lib-dirs:
+    ${PREFIX}/lib
 include-dirs:
     ${PREFIX}/include
 frameworks:
@@ -87,9 +89,10 @@ generate_buildinfo_linux() {
 include-dirs:
     ${PREFIX}/include
 extra-libraries:
-    ${PREFIX}/lib/libprimme.a
+    primme
 $(get_blas_libraries)
 extra-lib-dirs:
+    ${PREFIX}/lib
 $(get_blas_lib_dirs)
 EOF
 }
