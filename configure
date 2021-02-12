@@ -37,6 +37,17 @@ download_and_patch() {
   popd
 }
 
+check_dependencies() {
+  if ! pkg-config --exists blas; then
+    echo "Missing pkg-config dependencies: blas" >&2
+    exit 1
+  fi
+  if ! pkg-config --exists lapack; then
+    echo "Missing pkg-config dependencies: lapack" >&2
+    exit 1
+  fi
+}
+
 get_blas_libraries() {
   pkg-config --static --libs-only-l lapack blas | tr ' ' '\n' | sed 's/^-l/    /'
 }
@@ -46,6 +57,7 @@ get_blas_lib_dirs() {
 }
 
 build_static_lib() {
+  check_dependencies
   export CFLAGS="-O3 -march=nocona -mtune=haswell -fPIC -DNDEBUG -DPRIMME_BLASINT_SIZE=32 -DPRIMME_INT_SIZE=64"
   [[ "$OSTYPE" != "darwin"* ]] && export CFLAGS="$CFLAGS $(pkg-config --cflags lapack blas)"
   export FFLAGS="-fno-second-underscore -O3 -march=nocona -mtune=haswell"
