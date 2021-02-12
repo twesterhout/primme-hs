@@ -38,6 +38,7 @@ download_and_patch() {
 }
 
 check_dependencies() {
+  [[ "$OSTYPE" == "darwin"* ]] && return
   if ! pkg-config --exists blas; then
     echo "Missing pkg-config dependencies: blas" >&2
     exit 1
