@@ -8,6 +8,7 @@ module Numeric.PRIMME.Monitor
 where
 
 import Control.Exception.Safe (bracket)
+import Data.Coerce
 import Data.Proxy
 import qualified Data.Text as T
 import Data.Vector.Storable (Vector)
@@ -73,7 +74,7 @@ withMonitor _ f = bracket (mkCmonitorFun monitorImpl) freeHaskellFunPtr
       msgPtr
       _ {-timePtr-}
       eventPtr
-      _ {-paramsPtr-}
+      params
       ierrPtr = do
         basisSize <- fromIntegral <$> peek basisSizePtr
         blockSize <- fromIntegral <$> peek blockSizePtr
@@ -84,7 +85,7 @@ withMonitor _ f = bracket (mkCmonitorFun monitorImpl) freeHaskellFunPtr
             LockedTy -> pure PrimmeLockedInfo
             ConvergedTy -> pure PrimmeConvergedInfo
             MessageTy -> mkMessageInfo msgPtr
-        let stats = PrimmeStats
+        stats <- loadStats params
         let info = PrimmeInfo eventInfo stats
         shouldStop <- unPrimmeMonitor f info
         if shouldStop
@@ -95,6 +96,16 @@ loadVector :: (Storable a, Integral n, Show n) => Ptr a -> n -> IO (Vector a)
 loadVector dataPtr n
   | n < 0 = error $ "invalid 'n': " <> show n
   | otherwise = V.freeze =<< MV.unsafeFromForeignPtr0 <$> newForeignPtr_ dataPtr <*> pure (fromIntegral n)
+
+loadStats :: Ptr Cprimme_params -> IO PrimmeStats
+loadStats p =
+  PrimmeStats
+    <$> (fromIntegral <$> [CU.exp| PRIMME_INT { $(primme_params* p)->stats.numOuterIterations } |])
+    <*> (fromIntegral <$> [CU.exp| PRIMME_INT { $(primme_params* p)->stats.numRestarts } |])
+    <*> (fromIntegral <$> [CU.exp| PRIMME_INT { $(primme_params* p)->stats.numMatvecs } |])
+    <*> (coerce <$> [CU.exp| double { $(primme_params* p)->stats.timeMatvec } |])
+    <*> (coerce <$> [CU.exp| double { $(primme_params* p)->stats.timeOrtho } |])
+    <*> (coerce <$> [CU.exp| double { $(primme_params* p)->stats.timeDense } |])
 
 mkOuterInfo :: forall a. Storable a => Ptr () -> Int -> Ptr CInt -> Int -> Ptr () -> IO (PrimmeEventInfo a)
 mkOuterInfo

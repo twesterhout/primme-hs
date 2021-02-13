@@ -188,6 +188,13 @@ data PrimmeInfo a = PrimmeInfo (PrimmeEventInfo a) PrimmeStats
   deriving stock (Show)
 
 data PrimmeStats = PrimmeStats
+  { pStatsNumOuterIterations :: !Int,
+    pStatsNumRestarts :: !Int,
+    pStatsNumMatvecs :: !Int,
+    pStatsTimeMatvec :: !Double,
+    pStatsTimeOrtho :: !Double,
+    pStatsTimeDense :: !Double
+  }
   deriving stock (Show)
 
 data PrimmeEventInfo a
