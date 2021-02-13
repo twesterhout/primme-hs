@@ -3,18 +3,12 @@
 -- SPDX-License-Identifier: BSD-3-Clause
 -- Maintainer: Tom Westerhout <14264576+twesterhout@users.noreply.github.com>
 module Numeric.PRIMME.Monitor
-  ( PrimmeMonitor (..),
-    PrimmeInfo (..),
-    PrimmeEventInfo (..),
-    PrimmeStats (..),
-    withCmonitorFun,
+  ( withMonitor,
   )
 where
 
 import Control.Exception.Safe (bracket)
-import Control.Monad
 import Data.Proxy
-import Data.Text (Text)
 import qualified Data.Text as T
 import Data.Vector.Storable (Vector)
 import qualified Data.Vector.Storable as V
@@ -24,15 +18,44 @@ import Foreign.C.Types (CChar, CInt)
 import Foreign.ForeignPtr (newForeignPtr_)
 import Foreign.Ptr (FunPtr, Ptr, castPtr, freeHaskellFunPtr)
 import Foreign.Storable
-import Numeric.PRIMME.Internal
+import qualified Language.C.Inline as C
+import qualified Language.C.Inline.Unsafe as CU
+import Numeric.PRIMME.Context
+import Numeric.PRIMME.Types
+
+C.context (C.baseCtx <> primmeCtx)
+C.include "<primme.h>"
+
+data PrimmeEventType
+  = OuterIterationTy
+  | InnerIterationTy
+  | LockedTy
+  | ConvergedTy
+  | MessageTy
+
+instance Enum PrimmeEventType where
+  toEnum x
+    | x == primme_event_outer_iteration = OuterIterationTy
+    | x == primme_event_inner_iteration = InnerIterationTy
+    | x == primme_event_locked = LockedTy
+    | x == primme_event_converged = ConvergedTy
+    | x == primme_event_message = MessageTy
+    | otherwise = error $ "unexpected primme_event: " <> show x
+    where
+      primme_event_outer_iteration = fromIntegral [CU.pure| primme_event { primme_event_outer_iteration } |]
+      primme_event_inner_iteration = fromIntegral [CU.pure| primme_event { primme_event_inner_iteration } |]
+      primme_event_locked = fromIntegral [CU.pure| primme_event { primme_event_locked } |]
+      primme_event_converged = fromIntegral [CU.pure| primme_event { primme_event_converged } |]
+      primme_event_message = fromIntegral [CU.pure| primme_event { primme_event_message } |]
+  fromEnum _ = error "fromEnum not implemented for PrimmeEventType"
 
 foreign import ccall "wrapper"
-  mkCmonitorFun :: CmonitorFun () -> IO (FunPtr (CmonitorFun ()))
+  mkCmonitorFun :: CmonitorFun -> IO (FunPtr CmonitorFun)
 
-withCmonitorFun :: forall a r. BlasDatatype a => Proxy a -> PrimmeMonitor -> (FunPtr (CmonitorFun ()) -> IO r) -> IO r
-withCmonitorFun _ f = bracket (mkCmonitorFun monitorImpl) freeHaskellFunPtr
+withMonitor :: forall a r. BlasDatatype a => Proxy a -> PrimmeMonitor -> (FunPtr CmonitorFun -> IO r) -> IO r
+withMonitor _ f = bracket (mkCmonitorFun monitorImpl) freeHaskellFunPtr
   where
-    monitorImpl :: CmonitorFun ()
+    -- monitorImpl :: CmonitorFun ()
     monitorImpl
       basisEvalsPtr
       basisSizePtr
@@ -55,39 +78,18 @@ withCmonitorFun _ f = bracket (mkCmonitorFun monitorImpl) freeHaskellFunPtr
         basisSize <- fromIntegral <$> peek basisSizePtr
         blockSize <- fromIntegral <$> peek blockSizePtr
         eventInfo <-
-          peek (castPtr eventPtr :: Ptr Cprimme_event) >>= \event -> case event of
-            Cprimme_event_outer_iteration -> mkOuterInfo @a basisEvalsPtr basisSize iblockPtr blockSize basisNormsPtr
-            Cprimme_event_inner_iteration -> pure PrimmeInnerInfo
-            Cprimme_event_locked -> pure PrimmeLockedInfo
-            Cprimme_event_converged -> pure PrimmeConvergedInfo
-            Cprimme_event_message -> mkMessageInfo msgPtr
-            _ -> error $ "unexpected event: " <> show event
+          peek eventPtr >>= \event -> case (toEnum . fromIntegral $ event) of
+            OuterIterationTy -> mkOuterInfo @a basisEvalsPtr basisSize iblockPtr blockSize basisNormsPtr
+            InnerIterationTy -> pure PrimmeInnerInfo
+            LockedTy -> pure PrimmeLockedInfo
+            ConvergedTy -> pure PrimmeConvergedInfo
+            MessageTy -> mkMessageInfo msgPtr
         let stats = PrimmeStats
         let info = PrimmeInfo eventInfo stats
         shouldStop <- unPrimmeMonitor f info
-        pure ()
-
--- print "Done!"
--- when shouldStop $ do
---   poke ierrPtr 1
-
-newtype PrimmeMonitor = PrimmeMonitor
-  { unPrimmeMonitor :: forall a. BlasDatatype a => PrimmeInfo a -> IO Bool
-  }
-
-data PrimmeInfo a = PrimmeInfo (PrimmeEventInfo a) PrimmeStats
-  deriving (Show)
-
-data PrimmeStats = PrimmeStats
-  deriving (Show)
-
-data PrimmeEventInfo a
-  = PrimmeOuterInfo (Vector a) (Vector a)
-  | PrimmeInnerInfo
-  | PrimmeLockedInfo
-  | PrimmeConvergedInfo
-  | PrimmeMessageInfo !Text
-  deriving (Show)
+        if shouldStop
+          then poke ierrPtr 1
+          else poke ierrPtr 0
 
 loadVector :: (Storable a, Integral n, Show n) => Ptr a -> n -> IO (Vector a)
 loadVector dataPtr n

@@ -88,6 +88,9 @@ generate_buildinfo_osx() {
   cat <<-EOF
 extra-libraries:
     primme
+ghc-options:
+    -DPRIMME_INT_SIZE=64
+    -DPRIMME_BLASINT_SIZE=32
 extra-lib-dirs:
     ${PREFIX}/lib
 include-dirs:
@@ -101,6 +104,9 @@ generate_buildinfo_linux() {
   cat <<-EOF
 include-dirs:
     ${PREFIX}/include
+ghc-options:
+    -DPRIMME_INT_SIZE=64
+    -DPRIMME_BLASINT_SIZE=32
 extra-libraries:
     primme
 $(get_blas_libraries)

@@ -6,7 +6,6 @@ import Data.Vector.Storable (Vector)
 import qualified Data.Vector.Storable as V
 import Foreign.Storable (Storable)
 import Numeric.PRIMME
-import Numeric.PRIMME.Monitor
 
 ex1 :: Vector Double
 ex1 =
@@ -66,7 +65,7 @@ solution2 = (values, vectors)
 
 asOperator :: BlasDatatype a => Vector a -> (Int, PrimmeOperator a)
 asOperator matrix
-  | dim * dim == size = (dim, fromDense dim dim matrix)
+  | dim * dim == size = (dim, primmeFromDense (Block (dim, dim) dim matrix))
   | otherwise = error "matrix is not square"
   where
     size = V.length matrix
@@ -85,7 +84,7 @@ main = do
   forM_ [(ex1, solution1), (ex2, solution2)] $ \(ex, solution) -> do
     let (dim, operator) = asOperator ex
     let o =
-          defaultOptions
+          primmeDefaults
             { pDim = dim,
               pNumEvals = dim,
               pTarget = PrimmeSmallest,
