@@ -4,12 +4,14 @@
 -- Maintainer: Tom Westerhout <14264576+twesterhout@users.noreply.github.com>
 module Numeric.PRIMME.Monitor
   ( withMonitor,
+    primmePrettyInfo,
   )
 where
 
 import Control.Exception.Safe (bracket)
 import Data.Coerce
 import Data.Proxy
+import Data.Text (Text)
 import qualified Data.Text as T
 import Data.Vector.Storable (Vector)
 import qualified Data.Vector.Storable as V
@@ -23,6 +25,7 @@ import qualified Language.C.Inline as C
 import qualified Language.C.Inline.Unsafe as CU
 import Numeric.PRIMME.Context
 import Numeric.PRIMME.Types
+import Text.Printf
 
 C.context (C.baseCtx <> primmeCtx)
 C.include "<primme.h>"
@@ -64,7 +67,7 @@ withMonitor _ f = bracket (mkCmonitorFun monitorImpl) freeHaskellFunPtr
       iblockPtr
       blockSizePtr
       basisNormsPtr
-      _ {-numConvergedPtr-}
+      numConvergedPtr
       _ {-lockedEvalsPtr-}
       _ {-numLockedPtr-}
       _ {-lockedFlagsPtr-}
@@ -83,7 +86,7 @@ withMonitor _ f = bracket (mkCmonitorFun monitorImpl) freeHaskellFunPtr
             OuterIterationTy -> mkOuterInfo @a basisEvalsPtr basisSize iblockPtr blockSize basisNormsPtr
             InnerIterationTy -> pure PrimmeInnerInfo
             LockedTy -> pure PrimmeLockedInfo
-            ConvergedTy -> pure PrimmeConvergedInfo
+            ConvergedTy -> mkConvergedInfo @a basisEvalsPtr iblockPtr basisNormsPtr numConvergedPtr
             MessageTy -> mkMessageInfo msgPtr
         stats <- loadStats params
         let info = PrimmeInfo eventInfo stats
@@ -107,7 +110,7 @@ loadStats p =
     <*> (coerce <$> [CU.exp| double { $(primme_params* p)->stats.timeOrtho } |])
     <*> (coerce <$> [CU.exp| double { $(primme_params* p)->stats.timeDense } |])
 
-mkOuterInfo :: forall a. Storable a => Ptr () -> Int -> Ptr CInt -> Int -> Ptr () -> IO (PrimmeEventInfo a)
+mkOuterInfo :: forall a. BlasDatatype a => Ptr () -> Int -> Ptr CInt -> Int -> Ptr () -> IO (PrimmeEventInfo a)
 mkOuterInfo
   basisEvalsPtr
   basisSize
@@ -121,5 +124,33 @@ mkOuterInfo
     let blockNorms = V.map (\i -> basisNorms V.! i) iblock
     pure $ PrimmeOuterInfo blockEvals blockNorms
 
+mkConvergedInfo :: BlasDatatype a => Ptr () -> Ptr CInt -> Ptr () -> Ptr CInt -> IO (PrimmeEventInfo a)
+mkConvergedInfo basisEvalsPtr iblockPtr basisNormsPtr numConvergedPtr = do
+  numConverged <- fromIntegral <$> peek numConvergedPtr
+  i <- fromIntegral <$> peek iblockPtr
+  eval <- peekElemOff (castPtr basisEvalsPtr) i
+  norm <- peekElemOff (castPtr basisNormsPtr) i
+  pure $ PrimmeConvergedInfo numConverged eval norm
+
 mkMessageInfo :: Ptr CChar -> IO (PrimmeEventInfo a)
 mkMessageInfo msgPtr = PrimmeMessageInfo . T.pack <$> peekCString msgPtr
+
+primmePrettyInfo :: BlasDatatype a => PrimmeInfo a -> Text
+primmePrettyInfo (PrimmeInfo (PrimmeOuterInfo blockEvals blockNorms) stats) =
+  T.pack . mconcat $
+    [ printf "Processed block %d/%d: " (pStatsNumRestarts stats) (pStatsNumOuterIterations stats),
+      "eigenvalues ",
+      show blockEvals,
+      ", residual norms ",
+      show blockNorms,
+      printf ", %.0f%% in matvec, %.0f%% in orthogonalization, %.0f%% in dense linear algebra" (100 * timeMatvec) (100 * timeOrtho) (100 * timeDense),
+      printf ", time per matrix-vector %.1e s" (pStatsTimeMatvec stats / fromIntegral (pStatsNumMatvecs stats))
+    ]
+  where
+    timeTotal = pStatsTimeMatvec stats + pStatsTimeOrtho stats + pStatsTimeDense stats
+    timeMatvec = pStatsTimeMatvec stats / timeTotal
+    timeOrtho = pStatsTimeOrtho stats / timeTotal
+    timeDense = 1 - timeMatvec - timeOrtho
+primmePrettyInfo (PrimmeInfo (PrimmeConvergedInfo i eval norm) _) =
+  T.pack . mconcat $ ["Converged eigenvalue ", show i, ": ", show eval, ", residual norm ", show norm]
+primmePrettyInfo (PrimmeInfo info _) = T.pack $ show info

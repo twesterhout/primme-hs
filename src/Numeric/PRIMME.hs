@@ -50,6 +50,7 @@ module Numeric.PRIMME
     PrimmeInfo (..),
     PrimmeEventInfo (..),
     PrimmeStats (..),
+    primmePrettyInfo,
 
     -- * Dense Matrices
 

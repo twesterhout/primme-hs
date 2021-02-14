@@ -75,6 +75,7 @@ common common-options
                        TypeFamilies
                        TypeApplications
                        ScopedTypeVariables
+                       StandaloneDeriving
                        OverloadedStrings
                        RankNTypes
                        GADTs

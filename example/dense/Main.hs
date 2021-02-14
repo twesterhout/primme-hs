@@ -2,6 +2,8 @@ module Main (main) where
 
 import Control.Monad (forM_, unless)
 import Data.List (transpose)
+import qualified Data.Text as T
+import qualified Data.Text.IO as T
 import Data.Vector.Storable (Vector)
 import qualified Data.Vector.Storable as V
 import Foreign.Storable (Storable)
@@ -75,8 +77,8 @@ logAction :: PrimmeMonitor
 logAction = PrimmeMonitor helper
   where
     helper :: BlasDatatype a => PrimmeInfo a -> IO Bool
-    helper (PrimmeInfo eventInfo _) = do
-      print eventInfo
+    helper info = do
+      T.putStrLn $ primmePrettyInfo info
       pure False
 
 main :: IO ()

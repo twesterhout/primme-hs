@@ -1,4 +1,5 @@
 {-# LANGUAGE CPP #-}
+{-# LANGUAGE UndecidableInstances #-}
 
 module Numeric.PRIMME.Types
   ( PrimmeException (..),
@@ -185,7 +186,8 @@ newtype PrimmeMonitor = PrimmeMonitor
   }
 
 data PrimmeInfo a = PrimmeInfo (PrimmeEventInfo a) PrimmeStats
-  deriving stock (Show)
+
+deriving stock instance BlasDatatype a => Show (PrimmeInfo a)
 
 data PrimmeStats = PrimmeStats
   { pStatsNumOuterIterations :: !Int,
@@ -198,12 +200,13 @@ data PrimmeStats = PrimmeStats
   deriving stock (Show)
 
 data PrimmeEventInfo a
-  = PrimmeOuterInfo (Vector a) (Vector a)
+  = PrimmeOuterInfo !(Vector (BlasRealPart a)) !(Vector (BlasRealPart a))
   | PrimmeInnerInfo
   | PrimmeLockedInfo
-  | PrimmeConvergedInfo
+  | PrimmeConvergedInfo !Int !(BlasRealPart a) !(BlasRealPart a)
   | PrimmeMessageInfo !Text
-  deriving stock (Show)
+
+deriving stock instance BlasDatatype a => Show (PrimmeEventInfo a)
 
 -- | Specify some more information about the eigenvalue problem at hand.
 --
