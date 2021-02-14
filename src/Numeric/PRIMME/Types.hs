@@ -232,5 +232,5 @@ data PrimmeOptions = PrimmeOptions
     -- | Maximal block size. [See also](http://www.cs.wm.edu/~andreas/software/doc/appendix.html#c.primme_params.maxBlockSize)
     pMaxBlockSize :: !Int,
     -- | Logging
-    pLogAction :: !(Maybe PrimmeMonitor)
+    pLogAction :: !(Either Int PrimmeMonitor)
   }

@@ -90,7 +90,7 @@ main = do
             { pDim = dim,
               pNumEvals = dim,
               pTarget = PrimmeSmallest,
-              pLogAction = Just logAction,
+              pLogAction = Right logAction,
               pEps = 1.0e-9
             }
     (evals, evecs, rnorms) <- eigh o operator

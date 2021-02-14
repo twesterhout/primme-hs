@@ -1,6 +1,3 @@
-{-# LANGUAGE QuasiQuotes #-}
-{-# LANGUAGE TemplateHaskell #-}
-
 module Numeric.PRIMME.Options
   ( primmeDefaults,
     withOptions,
@@ -35,7 +32,7 @@ primmeDefaults =
       pMaxBasisSize = 0,
       pMinRestartSize = 0,
       pMaxBlockSize = 1,
-      pLogAction = Nothing
+      pLogAction = Left 0
     }
 
 initOptions :: PrimmeOptions -> Ptr Cprimme_params -> IO ()
@@ -92,7 +89,6 @@ initOptions options params
       $(primme_params* params)->maxBasisSize = $(int c_maxBasisSize);
       $(primme_params* params)->minRestartSize = $(int c_minRestartSize);
       $(primme_params* params)->maxBlockSize = $(int c_maxBlockSize);
-      $(primme_params* params)->printLevel = 5;
       return primme_set_method($(primme_preset_method c_method), $(primme_params* params));
     } |]
     when (status /= 0) . error $
@@ -133,7 +129,14 @@ withOptions options matvec action =
         $(void (*matvecPtr)(void*, PRIMME_INT*, void*, PRIMME_INT*, int*, primme_params*, int*))
       } |]
       case pLogAction options of
-        Just monitor -> withMonitor (Proxy :: Proxy a) monitor $ \monitorPtr -> do
+        Left level -> do
+          let c_level
+                | level < 0 || level > 5 =
+                  error $ "invalid printLevel in PrimmeOptions: " <> show level <> "; expected a number between 0 and 5"
+                | otherwise = fromIntegral level
+          [CU.exp| void { $(primme_params* params)->printLevel = $(int c_level) } |]
+          action params
+        Right monitor -> withMonitor (Proxy :: Proxy a) monitor $ \monitorPtr -> do
           [CU.block| void {
             $(primme_params* params)->monitorFun =
                 $(void (*monitorPtr)(void*, int*, int*, int*, int*, void*, int*, void*, int*,
@@ -142,4 +145,3 @@ withOptions options matvec action =
             $(primme_params* params)->printLevel = 0;
           } |]
           action params
-        Nothing -> action params
