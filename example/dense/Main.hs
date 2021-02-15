@@ -6,6 +6,7 @@ import qualified Data.Text as T
 import qualified Data.Text.IO as T
 import Data.Vector.Storable (Vector)
 import qualified Data.Vector.Storable as V
+import qualified Data.Vector.Storable.Mutable as MV
 import Foreign.Storable (Storable)
 import Numeric.PRIMME
 
@@ -99,5 +100,32 @@ main = do
     let overlap = abs $ dot evecs (snd solution)
     unless (isCloseFloating overlap 1) $
       error $ "Incorrect eigenvectors: " <> show evecs <> " != " <> show (snd solution) <> "; overlap = " <> show overlap
+    print evals
+    print rnorms
+  forM_ [(ex2, solution2)] $ \(ex, solution) -> do
+    let (dim, operator) = asOperator ex
+    let o =
+          primmeDefaults
+            { pDim = dim,
+              pNumEvals = dim,
+              pTarget = PrimmeSmallest,
+              pLogAction = Right logAction,
+              pEps = 1.0e-15
+            }
+    evecs <-
+      MBlock (5, 1) 5
+        <$> (V.unsafeThaw . V.fromList)
+          [ -0.41521949308114414,
+            -0.5319447141274747,
+            0.0006034108610660248,
+            -0.7367694253454836,
+            0.04240334242362954
+          ]
+    (evals, evecs', rnorms) <- eigh' o evecs operator
+    unless (isCloseVector evals (fst solution)) $
+      error $ "Incorrect eigenvalues: " <> show evals <> " != " <> show (fst solution)
+    let overlap = abs $ dot evecs' (snd solution)
+    unless (isCloseFloating overlap 1) $
+      error $ "Incorrect eigenvectors: " <> show evecs' <> " != " <> show (snd solution) <> "; overlap = " <> show overlap
     print evals
     print rnorms

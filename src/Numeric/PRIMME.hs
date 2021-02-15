@@ -44,6 +44,7 @@ module Numeric.PRIMME
 
     -- * Diagonalizing
     eigh,
+    eigh',
 
     -- * Logging
     PrimmeMonitor (..),
@@ -69,7 +70,7 @@ module Numeric.PRIMME
 where
 
 import Control.Exception.Safe (throw)
-import Control.Monad (unless)
+import Control.Monad (forM_, unless)
 import Control.Monad.ST (RealWorld)
 import Data.Complex
 import Data.Proxy
@@ -79,6 +80,7 @@ import Data.Vector.Storable.Mutable (MVector)
 import qualified Data.Vector.Storable.Mutable as MV
 import Foreign.C.Types (CInt (..))
 import Foreign.Ptr (Ptr)
+import Foreign.Storable
 import qualified Language.C.Inline as C
 import qualified Language.C.Inline.Unsafe as CU
 import Numeric.PRIMME.Context
@@ -86,6 +88,7 @@ import Numeric.PRIMME.Dense
 import Numeric.PRIMME.Monitor
 import Numeric.PRIMME.Options
 import Numeric.PRIMME.Types
+import Prelude hiding (init)
 
 C.context (C.baseCtx <> primmeCtx)
 C.include "<primme.h>"
@@ -114,6 +117,77 @@ eigh options matrix = do
   evecs' <- Block (dim, numEvals) dim <$> V.unsafeFreeze evecs
   rnorms' <- V.unsafeFreeze rnorms
   return (evals', evecs', rnorms')
+
+mkEmptyBlock :: Storable a => Int -> Int -> IO (MBlock RealWorld a)
+mkEmptyBlock rows columns
+  | rows <= 0 || columns <= 0 = error $ "invalid shape specified: " <> show (rows, columns)
+  | otherwise = MBlock (rows, columns) rows <$> MV.new (rows * columns)
+
+copyBlock :: Storable a => MBlock RealWorld a -> Block a -> IO ()
+copyBlock dest@(MBlock (r, c) _ _) src@(Block (r', c') _ _)
+  | r /= r' || c /= c' = error $ "block shape mismatch: " <> show (r, c) <> " != " <> show (r', c')
+  | otherwise = do
+    src' <- unsafeThaw src
+    forM_ [0 .. (c - 1)] $ \i ->
+      MV.copy (getColumn i dest) (getColumn i src')
+  where
+    getColumn :: Storable a => Int -> MBlock RealWorld a -> MVector RealWorld a
+    getColumn i (MBlock (rows, _) stride v) = MV.slice (i * stride) rows v
+
+unsafeThaw :: Storable a => Block a -> IO (MBlock RealWorld a)
+unsafeThaw (Block shape stride v) = MBlock shape stride <$> V.unsafeThaw v
+
+unsafeFreeze :: Storable a => MBlock RealWorld a -> IO (Block a)
+unsafeFreeze (MBlock shape stride v) = Block shape stride <$> V.unsafeFreeze v
+
+sliceBlock1 :: Storable a => Int -> Int -> MBlock s a -> MBlock s a
+sliceBlock1 i n (MBlock (r, c) stride v)
+  | i < 0 || n < 0 || i + n > c = error $ "invalid slice: [" <> show i <> ", " <> show (i + n) <> ")"
+  | otherwise = MBlock (r, n) stride $ MV.slice (i * stride) (n * stride) v
+
+eigh' ::
+  forall a.
+  BlasDatatype a =>
+  PrimmeOptions ->
+  MBlock RealWorld a ->
+  PrimmeOperator a ->
+  IO (Vector (BlasRealPart a), Block a, Vector (BlasRealPart a))
+eigh' options init@(MBlock (dim', initSize) _ _) matrix
+  | pDim options /= dim' =
+    error $
+      "'init' has wrong shape: "
+        <> show (dim', initSize)
+        <> "; expected a block with "
+        <> show (pDim options)
+        <> " rows"
+  | otherwise = do
+    let dim = pDim options
+        numEvals = pNumEvals options
+    evecs@(MBlock (_, _) evecsStride evecsData) <- case initSize < numEvals of
+      True -> do
+        temp <- mkEmptyBlock dim numEvals
+        copyBlock (sliceBlock1 0 initSize temp) =<< unsafeFreeze init
+        return temp
+      False -> return init
+    (evals :: MVector RealWorld (BlasRealPart a)) <- MV.new numEvals
+    (rnorms :: MVector RealWorld (BlasRealPart a)) <- MV.new numEvals
+    status <-
+      MV.unsafeWith evals $ \evalsPtr ->
+        MV.unsafeWith evecsData $ \evecsPtr ->
+          MV.unsafeWith rnorms $ \rnormsPtr ->
+            withOptions options matrix $ \optionsPtr -> do
+              let c_initSize = fromIntegral initSize
+                  c_evecsStride = fromIntegral evecsStride
+              [C.block| void {
+                $(primme_params* optionsPtr)->initSize = $(int c_initSize);
+                $(primme_params* optionsPtr)->ldevecs = $(PRIMME_INT c_evecsStride);
+              } |]
+              cPrimme evalsPtr evecsPtr rnormsPtr optionsPtr
+    unless (status == 0) $ throwPrimmeError status
+    evals' <- V.unsafeFreeze evals
+    evecs' <- unsafeFreeze $ sliceBlock1 0 numEvals evecs
+    rnorms' <- V.unsafeFreeze rnorms
+    return (evals', evecs', rnorms')
 
 throwPrimmeError :: CInt -> IO a
 throwPrimmeError c = case (- c) of
