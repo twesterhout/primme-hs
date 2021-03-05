@@ -48,11 +48,6 @@ common common-options
   build-depends:       base >= 4.13.0.0 && < 5
                      , vector
                      , text
-                     , safe-exceptions
-                     , co-log-core
-                     , inline-c
-                     , containers
-                     , template-haskell
 
   ghc-options:         -Wall
                        -Wcompat
@@ -88,6 +83,10 @@ library
   import:              common-options
   -- build-tool-depends:  c2hs:c2hs >= 0.28.6
   hs-source-dirs:      src
+  build-depends:       safe-exceptions
+                     , inline-c
+                     , containers
+                     , template-haskell
   -- c-sources:           cbits/wrapper.c
   exposed-modules:     Numeric.PRIMME
                      , Numeric.PRIMME.Context
