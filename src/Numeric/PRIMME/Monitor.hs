@@ -137,20 +137,23 @@ mkMessageInfo msgPtr = PrimmeMessageInfo . T.pack <$> peekCString msgPtr
 
 primmePrettyInfo :: BlasDatatype a => PrimmeInfo a -> Text
 primmePrettyInfo (PrimmeInfo (PrimmeOuterInfo blockEvals blockNorms) stats) =
-  T.pack . mconcat $
-    [ printf "Processed block %d/%d: " (pStatsNumRestarts stats) (pStatsNumOuterIterations stats),
-      "eigenvalues ",
-      show blockEvals,
-      ", residual norms ",
-      show blockNorms,
-      printf ", %.0f%% in matvec, %.0f%% in orthogonalization, %.0f%% in dense linear algebra" (100 * timeMatvec) (100 * timeOrtho) (100 * timeDense),
-      printf ", time per matrix-vector %.1e s" (pStatsTimeMatvec stats / fromIntegral (pStatsNumMatvecs stats))
-    ]
+  T.pack . mconcat $ [msgHeader, msgEvals, msgNorms, msgTimings]
   where
+    msgHeader = printf "Processed block %d/%d: " (pStatsNumRestarts stats) (pStatsNumOuterIterations stats)
+    msgEvals = if V.null blockEvals then mempty else mconcat ["eigenvalues ", show blockEvals, ", "]
+    msgNorms = if V.null blockNorms then mempty else mconcat ["residual norms ", show blockNorms, ", "]
     timeTotal = pStatsTimeMatvec stats + pStatsTimeOrtho stats + pStatsTimeDense stats
-    timeMatvec = pStatsTimeMatvec stats / timeTotal
-    timeOrtho = pStatsTimeOrtho stats / timeTotal
-    timeDense = 1 - timeMatvec - timeOrtho
+    timeMatvec = 100 * (pStatsTimeMatvec stats / timeTotal)
+    timeOrtho = 100 * (pStatsTimeOrtho stats / timeTotal)
+    timeDense = 100 - timeMatvec - timeOrtho
+    timePerMatvec = pStatsTimeMatvec stats / fromIntegral (pStatsNumMatvecs stats)
+    msgTimings =
+      printf
+        "%.0f%% in matvec, %.0f%% in orthogonalization, %.0f%% in dense linear algebra, time per matrix-vector %.1e s"
+        timeMatvec
+        timeOrtho
+        timeDense
+        timePerMatvec
 primmePrettyInfo (PrimmeInfo (PrimmeConvergedInfo i eval norm) _) =
   T.pack . mconcat $ ["Converged eigenvalue ", show i, ": ", show eval, ", residual norm ", show norm]
 primmePrettyInfo (PrimmeInfo info _) = T.pack $ show info
