@@ -35,12 +35,18 @@ get_lapack_target() {
 download_and_patch() {
   mkdir -vp "$WORKDIR"
   pushd "$WORKDIR"
-  if [[ ! -f "v${PRIMME_VERSION}.tar.gz" ]]; then
-    echo "Downloading primme-${PRIMME_VERSION} ..."
-    wget --no-verbose "https://github.com/primme/primme/archive/v${PRIMME_VERSION}.tar.gz"
+  if [[ ! -d "primme" ]]; then
+	git clone "https://github.com/primme/primme.git"
   fi
-  tar xf "v${PRIMME_VERSION}.tar.gz"
-  pushd "primme-${PRIMME_VERSION}"
+  pushd primme
+  git pull
+  git checkout eloy/fix-large-mats
+  # if [[ ! -f "v${PRIMME_VERSION}.tar.gz" ]]; then
+  #   echo "Downloading primme-${PRIMME_VERSION} ..."
+  #   wget --no-verbose "https://github.com/primme/primme/archive/v${PRIMME_VERSION}.tar.gz"
+  # fi
+  # tar xf "v${PRIMME_VERSION}.tar.gz"
+  # pushd "primme-${PRIMME_VERSION}"
   if [[ "$OSTYPE" == "darwin"* ]]; then
     echo "Pathing primme.h..."
     patch -u include/primme.h "${SCRIPT_DIR}/cbits/primme.h.patch"
@@ -95,7 +101,7 @@ build_static_lib() {
   echo "Using CFLAGS: $CFLAGS"
   echo "Using FFLAGS: $FFLAGS"
   echo "Using LDFLAGS: $LDFLAGS"
-  pushd "${WORKDIR}/primme-${PRIMME_VERSION}"
+  pushd "${WORKDIR}/primme"
   make -j$(get_num_procs) lib
   make install
   if [[ "$OSTYPE" == "darwin"* ]]; then
@@ -205,8 +211,8 @@ main() {
 	echo "Generated build info:"
 	cat "primme-hs.buildinfo"
   else
-    if [ -d "${WORKDIR}/primme-${PRIMME_VERSION}" ]; then
-      cd "${WORKDIR}/primme-${PRIMME_VERSION}"
+    if [ -d "${WORKDIR}/primme" ]; then
+      cd "${WORKDIR}/primme"
       make clean
     fi
   fi
