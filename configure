@@ -18,6 +18,10 @@ get_num_procs() {
   fi
 }
 
+get_ghc_version() {
+  ghc --version | tr ' ' '\0' | tail -z -n 1
+}
+
 download_and_patch() {
   mkdir -vp "$WORKDIR"
   pushd "$WORKDIR"
@@ -165,6 +169,10 @@ main() {
     download_and_patch
     build_static_lib
     generate_buildinfo >"primme-hs.buildinfo"
+	echo "$PWD contains"
+    ls -l
+	echo "Generated build info:"
+	cat "primme-hs.buildinfo"
   else
     if [ -d "${WORKDIR}/primme-${PRIMME_VERSION}" ]; then
       cd "${WORKDIR}/primme-${PRIMME_VERSION}"
