@@ -9,6 +9,8 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" >/dev/null 2>&1 && pwd -L | se
 PRIMME_VERSION=3.1.1
 WORKDIR="${SCRIPT_DIR}/third_party/build"
 export PREFIX="${SCRIPT_DIR}/third_party/primme"
+INTERFACE=32
+BLAS_SUFFIX=""
 
 get_num_procs() {
   if [[ "$OSTYPE" == "darwin"* ]]; then
@@ -20,6 +22,14 @@ get_num_procs() {
 
 get_ghc_version() {
   ghc --version | tr ' ' '\0' | tail -z -n 1
+}
+
+get_blas_target() {
+  echo "blas${BLAS_SUFFIX}"
+}
+
+get_lapack_target() {
+  echo "lapack${BLAS_SUFFIX}"
 }
 
 download_and_patch() {
@@ -44,28 +54,37 @@ download_and_patch() {
 
 check_dependencies() {
   [[ "$OSTYPE" == "darwin"* ]] && return
-  if ! pkg-config --exists blas; then
-    echo "Missing pkg-config dependencies: blas" >&2
+  if ! pkg-config --exists $(get_blas_target); then
+	echo "Missing pkg-config dependencies: $(get_blas_target)" >&2
     exit 1
   fi
-  if ! pkg-config --exists lapack; then
-    echo "Missing pkg-config dependencies: lapack" >&2
+  if ! pkg-config --exists $(get_lapack_target); then
+	echo "Missing pkg-config dependencies: $(get_lapack_target)" >&2
     exit 1
   fi
 }
 
 get_blas_libraries() {
-  pkg-config --static --libs-only-l lapack blas | tr ' ' '\n' | sed 's/^-l/    /'
+  pkg-config --static --libs-only-l $(get_lapack_target) $(get_blas_target) | tr ' ' '\n' | sed 's/^-l/    /'
+  # echo "    mkl_rt"
+  # echo "    gomp"
+  # echo "    m"
+}
+
+get_blas_cflags() {
+  pkg-config --cflags $(get_lapack_target) $(get_blas_target)
+  # echo "-I/vol/opt/intelcompilers/intel-2019u5/mkl/include"
 }
 
 get_blas_lib_dirs() {
-  pkg-config --static --libs-only-L lapack blas | tr ' ' '\n' | sed 's/^-L/    /'
+  pkg-config --static --libs-only-L $(get_lapack_target) $(get_blas_target) | tr ' ' '\n' | sed 's/^-L/    /'
+  # echo "    /vol/opt/intelcompilers/intel-2019u5/mkl/lib/intel64"
 }
 
 build_static_lib() {
   check_dependencies
-  export CFLAGS="-O3 -march=nocona -mtune=haswell -fPIC -DNDEBUG -DPRIMME_BLASINT_SIZE=32 -DPRIMME_INT_SIZE=64"
-  [[ "$OSTYPE" != "darwin"* ]] && export CFLAGS="$CFLAGS $(pkg-config --cflags lapack blas)"
+  export CFLAGS="-O3 -march=nocona -mtune=haswell -fPIC -DNDEBUG -DPRIMME_BLASINT_SIZE=${INTERFACE} -DPRIMME_INT_SIZE=64"
+  [[ "$OSTYPE" != "darwin"* ]] && export CFLAGS="$CFLAGS $(get_blas_cflags)"
   export FFLAGS="-fno-second-underscore -O3 -march=nocona -mtune=haswell"
   if [[ "$OSTYPE" == "darwin"* ]]; then
     export LDFLAGS="-framework Accelerate"
@@ -94,7 +113,7 @@ extra-libraries:
     primme
 ghc-options:
     -DPRIMME_INT_SIZE=64
-    -DPRIMME_BLASINT_SIZE=32
+    -DPRIMME_BLASINT_SIZE=${INTERFACE}
 extra-lib-dirs:
     ${PREFIX}/lib
 include-dirs:
@@ -110,7 +129,7 @@ include-dirs:
     ${PREFIX}/include
 ghc-options:
     -DPRIMME_INT_SIZE=64
-    -DPRIMME_BLASINT_SIZE=32
+    -DPRIMME_BLASINT_SIZE=${INTERFACE}
 extra-libraries:
     primme
 $(get_blas_libraries)
@@ -155,9 +174,21 @@ main() {
       exit 0
       ;;
     CC=*)
-      eval "export $1"
+      eval "export $key"
       shift
       ;;
+	--blas-interface=*)
+      INTERFACE="${key#*=}"
+	  if [[ "$INTERFACE" -eq 64 ]]; then
+		BLAS_SUFFIX=64
+	  elif [[ "$INTERFACE" -eq 32 ]]; then
+		:
+	  else
+		echo "Error: invalid --blas-interface argument: $INTERFACE; expected either 32 or 64"
+		exit 1
+	  fi
+	  shift
+	  ;;
     *)
       echo "Warning: argument '$1' ignored"
       shift
