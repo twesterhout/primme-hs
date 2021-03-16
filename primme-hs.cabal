@@ -14,7 +14,8 @@ build-type:            Configure
 extra-doc-files:       README.md
                        CHANGELOG.md
 tested-with:           GHC == 8.8.4
-extra-source-files:    build_primme.sh
+extra-source-files:    configure
+                       build_primme.sh
                        cbits/wrapper.h
                        cbits/primme.h.patch
                        cbits/common.h.patch
