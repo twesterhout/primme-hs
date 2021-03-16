@@ -8,6 +8,7 @@ set -eu
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" >/dev/null 2>&1 && pwd -L | sed 's://:/:g')"
 PRIMME_VERSION=3.1.1
 WORKDIR="${SCRIPT_DIR}/third_party/build"
+export PREFIX="${SCRIPT_DIR}/third_party/primme"
 
 get_num_procs() {
   if [[ "$OSTYPE" == "darwin"* ]]; then
@@ -68,7 +69,6 @@ build_static_lib() {
     export LDFLAGS=
   fi
   export PRIMME_WITH_HALF=no PRIMME_WITH_FLOAT=yes
-  export PREFIX="${SCRIPT_DIR}/third_party/primme"
   echo "Using CFLAGS: $CFLAGS"
   echo "Using FFLAGS: $FFLAGS"
   echo "Using LDFLAGS: $LDFLAGS"
