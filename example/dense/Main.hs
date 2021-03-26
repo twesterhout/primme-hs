@@ -40,6 +40,7 @@ isCloseVector a b = V.all id $ V.zipWith isCloseFloating a b
 
 dot :: (Num a, Storable a) => Block a -> Block a -> a
 dot (Block aShape aStride aData) (Block bShape bStride bData)
+  | aShape /= bShape = error "Blocks have different sizes"
   | fst aShape == aStride && fst bShape == bStride = V.foldl' (+) 0 $ V.zipWith (*) aData bData
   | otherwise = error "non-contiguous Blocks are not yet supported"
 
@@ -58,7 +59,7 @@ solution2 = (values, vectors)
   where
     values = V.fromList [-1.3270592970280437, -0.37156539032819186, 0.5931686225674098, 0.8192103673252326, 1.6661589097071987]
     vectors =
-      Block (3, 3) 3 . V.fromList . concat . transpose $
+      Block (5, 5) 5 . V.fromList . concat . transpose $
         [ [-0.41521949308114414, 0.5861105972845077, 0.514456651784022, -0.26740905865910647, 0.38456974542787414],
           [-0.5319447141274747, -0.1908405652211378, -0.6520896176572546, -0.3968496193627089, 0.3128964843733538],
           [0.0006034108610660248, -0.5317998335656995, 0.444566558507755, -0.6749724588809534, -0.2529057684664351],
