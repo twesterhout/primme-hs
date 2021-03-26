@@ -1,5 +1,5 @@
 Bootstrap: library
-From: twesterhout/default/alpine-openblas:latest
+From: twesterhout/default/alpine-openblas:sha256.4812ceb0d1fe9c270dae93a24ab3eae506bf27ebc91985f8325bc8b5c9e18ba8
 Stage: build_openblas
 
 Bootstrap: docker
@@ -12,8 +12,8 @@ Stage: base
     /usr/include/f77blas.h         /usr/include/
     /usr/include/lapack.h          /usr/include/
     /usr/include/openblas_config.h /usr/include/
-    /usr/lib/pkgconfig/blas.pc     /usr/lib/pkgconfig/blas.pc
-    /usr/lib/pkgconfig/lapack.pc   /usr/lib/pkgconfig/lapack.pc
+    /usr/lib/pkgconfig/blas*       /usr/lib/pkgconfig/
+    /usr/lib/pkgconfig/lapack*     /usr/lib/pkgconfig/
 
 %post
     set -eu

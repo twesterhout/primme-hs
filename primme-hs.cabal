@@ -15,28 +15,13 @@ extra-doc-files:       README.md
                        CHANGELOG.md
 tested-with:           GHC == 8.8.4
 extra-source-files:    configure
-                       build_primme.sh
                        cbits/wrapper.h
                        cbits/primme.h.patch
                        cbits/common.h.patch
 
-flag use_shared_libs
-  description:         Use shared libprimme (useful for local development since GHCi does not support loading static libraries).
-  default:             False
-
 flag use_system_libprimme
   description:         Use libprimme that is installed on the system.
   default:             False
-
-flag use_openblas
-  description:         Link with OpenBLAS library (ignored on OSX).
-  default:             True
-
-flag use_accelerate
-  description:         Link with the Accelerate Framework (only relevant for OSX).
-  default:             True
-
-
 
 custom-setup
   setup-depends:       base >= 4.13.0.0 && < 5

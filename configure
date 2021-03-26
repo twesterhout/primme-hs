@@ -49,9 +49,11 @@ download_and_patch() {
   # pushd "primme-${PRIMME_VERSION}"
   if [[ "$OSTYPE" == "darwin"* ]]; then
     echo "Pathing primme.h..."
+    git checkout include/primme.h
     patch -u include/primme.h "${SCRIPT_DIR}/cbits/primme.h.patch"
   elif [[ "$OSTYPE" == "linux-musl"* ]]; then
     echo "Pathing common.h..."
+    git checkout src/include/common.h
     patch -u src/include/common.h "${SCRIPT_DIR}/cbits/common.h.patch"
   fi
   popd
