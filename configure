@@ -36,7 +36,7 @@ download_and_patch() {
   mkdir -vp "$WORKDIR"
   pushd "$WORKDIR"
   if [[ ! -d "primme" ]]; then
-	git clone "https://github.com/primme/primme.git"
+    git clone "https://github.com/primme/primme.git"
   fi
   pushd primme
   git pull
@@ -48,11 +48,11 @@ download_and_patch() {
   # tar xf "v${PRIMME_VERSION}.tar.gz"
   # pushd "primme-${PRIMME_VERSION}"
   if [[ "$OSTYPE" == "darwin"* ]]; then
-    echo "Pathing primme.h..."
+    echo "Patching primme.h..."
     git checkout include/primme.h
     patch -u include/primme.h "${SCRIPT_DIR}/cbits/primme.h.patch"
   elif [[ "$OSTYPE" == "linux-musl"* ]]; then
-    echo "Pathing common.h..."
+    echo "Patching common.h..."
     git checkout src/include/common.h
     patch -u src/include/common.h "${SCRIPT_DIR}/cbits/common.h.patch"
   fi
@@ -63,11 +63,11 @@ download_and_patch() {
 check_dependencies() {
   [[ "$OSTYPE" == "darwin"* ]] && return
   if ! pkg-config --exists $(get_blas_target); then
-	echo "Missing pkg-config dependencies: $(get_blas_target)" >&2
+    echo "Missing pkg-config dependencies: $(get_blas_target)" >&2
     exit 1
   fi
   if ! pkg-config --exists $(get_lapack_target); then
-	echo "Missing pkg-config dependencies: $(get_lapack_target)" >&2
+    echo "Missing pkg-config dependencies: $(get_lapack_target)" >&2
     exit 1
   fi
 }
@@ -185,18 +185,18 @@ main() {
       eval "export $key"
       shift
       ;;
-	--blas-interface=*)
+    --blas-interface=*)
       INTERFACE="${key#*=}"
-	  if [[ "$INTERFACE" -eq 64 ]]; then
-		BLAS_SUFFIX=64
-	  elif [[ "$INTERFACE" -eq 32 ]]; then
-		:
-	  else
-		echo "Error: invalid --blas-interface argument: $INTERFACE; expected either 32 or 64"
-		exit 1
-	  fi
-	  shift
-	  ;;
+      if [[ "$INTERFACE" -eq 64 ]]; then
+        BLAS_SUFFIX=64
+      elif [[ "$INTERFACE" -eq 32 ]]; then
+        :
+      else
+        echo "Error: invalid --blas-interface argument: $INTERFACE; expected either 32 or 64"
+        exit 1
+      fi
+      shift
+      ;;
     *)
       echo "Warning: argument '$1' ignored"
       shift
@@ -208,10 +208,10 @@ main() {
     download_and_patch
     build_static_lib
     generate_buildinfo >"primme-hs.buildinfo"
-	echo "$PWD contains"
+    echo "$PWD contains"
     ls -l
-	echo "Generated build info:"
-	cat "primme-hs.buildinfo"
+    echo "Generated build info:"
+    cat "primme-hs.buildinfo"
   else
     if [ -d "${WORKDIR}/primme" ]; then
       cd "${WORKDIR}/primme"
